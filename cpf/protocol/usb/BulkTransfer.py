@@ -7,12 +7,15 @@
 @time: 2018/11/2 19:28
 @desc:
 """
-import usb.core
-import usb.util
 from time import sleep
 
+import usb.core
+import usb.util
 
-class BulkTransfer:
+from cpf.protocol.Base import Base
+
+
+class BulkTransfer(Base):
     """
     实现 usb bluk 传输
     """
@@ -85,7 +88,28 @@ class BulkTransfer:
         return data
 
     def is_dead(self):
-        pass
+        try:
+            res = usb.control.get_status(self.dev)
+            print(res)
+        except usb.core.USBError as e:
+            if e.backend_error_code == -7:  # LIBUSB_ERROR_TIMEOUT
+                print('传输超时')
+
+            elif (e.backend_error_code == -4):  # LIBUSB_ERROR_NO_DEVICE
+                print('设备已经断开')
+
+            elif (e.backend_error_code == -3):  # LIBUSB_ERROR_ACCESS
+                print('Device couldn\'t be accessed!')
+
+            else:
+                print(e)
+
+            return True
+
+        if res < 0 or res > 2:
+            return True
+
+        return False
 
 
 if __name__ == '__main__':

@@ -9,8 +9,10 @@
 """
 import scapy.all as scapy
 
+from cpf.protocol.Base import Base
 
-class L2Communicator:
+
+class L2Communicator(Base):
     """
     允许用户直接发送以太网的数据包
     """
@@ -27,9 +29,6 @@ class L2Communicator:
 
     def send(self, data):
         scapy.sendp(data, iface=self.iface)
-
-    def is_dead(self):
-        pass
 
 
 if __name__ == '__main__':

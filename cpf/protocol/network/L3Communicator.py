@@ -8,8 +8,9 @@
 @desc:
 """
 import scapy.all as scapy
+from cpf.protocol.Base import Base
 
-class L3Communicator:
+class L3Communicator(Base):
     """
     在 ip 层通信的类，直接发送 ip 层的数据包
     """
@@ -36,9 +37,6 @@ class L3Communicator:
 
         # 使用 send ， 确保下层的结构完整
         scapy.send(scapy.IP(dst=self.dst) / data)
-
-    def is_dead(self):
-        pass
 
 
 if __name__ == '__main__':

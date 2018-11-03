@@ -9,8 +9,10 @@
 """
 import parallel
 
+from cpf.protocol.Base import Base
 
-class Parallel:
+
+class Parallel(Base):
     """
     实现 并口 的基础通信
     """
@@ -30,11 +32,10 @@ class Parallel:
     def recv(self, size=1):
         return self.p.getData()
 
-    def is_dead(self):
-        pass
-
 
 if __name__ == '__main__':
     p = Parallel()
     p.send("kkkllllxxxxb")
     print(chr(p.recv()))
+
+    p.is_dead()

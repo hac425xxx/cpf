@@ -9,9 +9,9 @@
 """
 import serial
 from time import sleep
+from cpf.protocol.Base import Base
 
-
-class Serial:
+class Serial(Base):
     """
     实现 串口 的基础通信
     """
@@ -37,9 +37,6 @@ class Serial:
 
     def send(self, data):
         return self.ser.write(data)
-
-    def is_dead(self):
-        pass
 
 
 if __name__ == '__main__':

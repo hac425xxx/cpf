@@ -9,9 +9,10 @@
 """
 import usb.core
 import usb.util
+from cpf.protocol.Base import Base
 
 
-class ControlTransfer:
+class ControlTransfer(Base):
     """
     实现 usb 控制传输
     """

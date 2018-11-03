@@ -8,10 +8,11 @@
 @desc:
 """
 import socket
-from time import sleep
+
+from cpf.protocol.Base import Base
 
 
-class UDPCommunicator:
+class UDPCommunicator(Base):
     """
     实现 udp 的基础通信
     """
@@ -31,9 +32,6 @@ class UDPCommunicator:
     def send(self, data):
         self.s.sendto(data, self.address)
         pass
-
-    def is_dead(self):
-        raise NotImplementedError("由于 udp 特殊性，请根据目标程序编写")
 
     def __del__(self):
         # print("调用析构函数， 关闭 socket")

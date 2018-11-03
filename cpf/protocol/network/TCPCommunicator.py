@@ -9,9 +9,9 @@
 """
 import socket
 from time import sleep
+from cpf.protocol.Base import Base
 
-
-class TCPCommunicator:
+class TCPCommunicator(Base):
     """
     实现 tcp 的基础通信
     """

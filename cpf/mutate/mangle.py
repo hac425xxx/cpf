@@ -10,9 +10,6 @@
 import random
 from utils import *
 
-# https://security.tencent.com/index.php/blog/msg/35
-SPECIAL_CHAR = ['\x00', '\xFF', '\x3F', '\x7F', '\x80', '\xFE', '\x60']
-
 
 def mangle_resize(data):
     """
@@ -248,6 +245,112 @@ def mangle_add_sub(data):
     return data
 
 
+def mangle_mem_copy(data):
+    """
+    取随机位置， 随机长度的数据，复制到随机位置， 覆盖
+    """
+
+    length = len(data)
+    # 获取要填充的数据的长度
+    size = random.randint(0, length - 1)
+
+    off_from = random.randint(0, length - size)
+    off_to = random.randint(0, length - size)
+
+    return replace_string(data, data[off_from:off_from + size], off_to)
+
+
+def mangle_mem_insert(data):
+    """
+    取随机位置， 随机长度的数据，插入到随机位置
+    """
+
+    length = len(data)
+    # 获取要填充的数据的长度
+    size = random.randint(0, length - 1)
+
+    off_from = random.randint(0, length - size)
+    off_to = random.randint(0, length - 1)
+
+    return insert_string(data, data[off_from:off_from + size], off_to)
+
+
+def mangle_memset_max(data):
+    """  在随机位置填充随机长度的 特殊字符， 0xff, 0x7f ....... """
+    # https://security.tencent.com/index.php/blog/msg/35
+    special_char = ['\x00', '\xFF', '\x3F', '\x7F', '\x80', '\xFE', '\x60']
+    byte = special_char[random.randint(0, len(special_char) - 1)]
+    length = len(data)
+    # 获取要填充的数据的长度
+    size = random.randint(0, length - 1)
+    off = random.randint(0, length - size)
+    return replace_string(data, byte * size, off)
+
+
+def mangle_random(data):
+    """  取随机位置、随机大小的缓冲区，用随机数填充 """
+
+    length = len(data)
+    # 获取要填充的数据的长度
+    size = random.randint(0, length - 1)
+    off = random.randint(0, length - size)
+    return replace_string(data, get_random_string(size), off)
+
+
+def mangle_clonebyte(data):
+    """
+    取两处随机位置的作数据交换
+    """
+
+    length = len(data)
+    # 获取要填充的数据的长度
+    size = random.randint(0, length - 1)
+
+    off_from = random.randint(0, length - size)
+    data_from = data[off_from:off_from + size]
+
+    off_to = random.randint(0, length - size)
+    data_to = data[off_to:off_to + size]
+    data = replace_string(data, data_from, off_to)
+    data = replace_string(data, data_to, off_from)
+    return data
+
+
+def mangle_expand(data):
+    """
+    在随机位置，取随机长度的数据追加到数据末尾
+    """
+
+    length = len(data)
+    # 获取要填充的数据的长度
+    size = random.randint(0, length - 1)
+    off = random.randint(0, length - size)
+
+    return data + data[off:off + size]
+
+
+def mangle_shrink(data):
+    """
+    随机删减内容
+    """
+
+    length = len(data)
+    # 获取要填充的数据的长度
+    size = random.randint(0, length - 1)
+    off = random.randint(0, length - size)
+    return data[:off] + data[off + size + 1:]
+
+
+def mangle_insert_rnd(data):
+    """  在随机位置插入随机长度(长度最大为文件自身长度)的字符串 """
+
+    length = len(data)
+    # 获取要填充的数据的长度
+    off = random.randint(0, length - 1)
+    size = random.randint(0, len(data))
+    return insert_string(data, get_random_string(size), off)
+
+
 if __name__ == '__main__':
     src = "123456789"
 
@@ -260,4 +363,12 @@ if __name__ == '__main__':
         # hexdump(mangle_incbyte(src))
         # hexdump(mangle_decbyte(src))
         # hexdump(mangle_negbyte(src))
-        hexdump(mangle_add_sub(src))
+        # hexdump(mangle_add_sub(src))
+        # hexdump(mangle_mem_copy(src))
+        # hexdump(mangle_mem_insert(src))
+        # hexdump(mangle_memset_max(src))
+        # hexdump(mangle_random(src))
+        # hexdump(mangle_clonebyte(src))
+        # hexdump(mangle_expand(src))
+        # hexdump(mangle_shrink(src))
+        hexdump(mangle_insert_rnd(src))

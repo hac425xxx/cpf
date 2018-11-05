@@ -10,13 +10,29 @@
 import random
 from utils import *
 
+MANGLE_FUNCS = {
+    0: lambda data: mangle_resize(data),
+    1: lambda data: mangle_byte(data),
+    2: lambda data: mangle_bit(data),
+    3: lambda data: mangle_bytes(data),
+    4: lambda data: mangle_magic(data),
+    5: lambda data: mangle_incbyte(data),
+    6: lambda data: mangle_decbyte(data),
+    7: lambda data: mangle_negbyte(data),
+    8: lambda data: mangle_add_sub(data),
+    9: lambda data: mangle_mem_copy(data),
+    10: lambda data: mangle_mem_insert(data),
+    11: lambda data: mangle_memset_max(data),
+    12: lambda data: mangle_random(data),
+    13: lambda data: mangle_clonebyte(data),
+    14: lambda data: mangle_expand(data),
+    15: lambda data: mangle_shrink(data),
+    16: lambda data: mangle_insert_rnd(data)
+}
+
 
 def mangle_resize(data):
-    """
-    随机插入 若干个 空格到  data 里面
-    :param data:
-    :return:
-    """
+    """ 用空格填充随机位置 """
     length = len(data)
     # 获取要填充的数据的长度
     size = random.randint(0, length)
@@ -59,6 +75,10 @@ def mangle_bytes(data):
     """
 
     length = len(data)
+
+    if length < 4:
+        return data
+
     # 获取要填充的数据的长度
     size = random.randint(2, 4)
 
@@ -166,7 +186,7 @@ def mangle_incbyte(data):
     off = random.randint(0, length - 1)
 
     # 随机取出字符，然后加1
-    data[off] = chr(ord(data[off]) + 1)
+    data[off] = chr((ord(data[off]) + 1) & 0xff)
     return "".join(data)
 
 
@@ -179,7 +199,9 @@ def mangle_decbyte(data):
     off = random.randint(0, length - 1)
 
     # 随机取出字符，然后减1
-    data[off] = chr(ord(data[off]) - 1)
+    # print("{}==>{}".format(off, hex(ord(data[off]))))
+    data[off] = chr((ord(data[off]) - 1) & 0xff)
+
     return "".join(data)
 
 
@@ -204,6 +226,10 @@ def mangle_add_sub(data):
     length = len(data)
     #  选择变量长度
     var_len = 1 << random.randint(0, 3)
+
+    if length < var_len:
+        return data
+
     off = random.randint(0, length - var_len)
 
     # 操作数
@@ -338,7 +364,7 @@ def mangle_shrink(data):
     # 获取要填充的数据的长度
     size = random.randint(0, length - 1)
     off = random.randint(0, length - size)
-    return data[:off] + data[off + size + 1:]
+    return data[:off] + data[off + size:]
 
 
 def mangle_insert_rnd(data):
@@ -352,9 +378,9 @@ def mangle_insert_rnd(data):
 
 
 if __name__ == '__main__':
-    src = "123456789"
-
-    for i in range(20):
+    src = "123456789" * 20
+    print(len(MANGLE_FUNCS))
+    for i in range(100):
         # print(mangle_resize(src))
         # hexdump(mangle_byte(src))
         # hexdump(mangle_bit(src))
@@ -371,4 +397,6 @@ if __name__ == '__main__':
         # hexdump(mangle_clonebyte(src))
         # hexdump(mangle_expand(src))
         # hexdump(mangle_shrink(src))
-        hexdump(mangle_insert_rnd(src))
+        # hexdump(mangle_insert_rnd(src))
+        func = MANGLE_FUNCS[random.randint(0, len(MANGLE_FUNCS) - 1)]
+        hexdump(func(src))

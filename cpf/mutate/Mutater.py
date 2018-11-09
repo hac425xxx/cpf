@@ -24,7 +24,7 @@ class Mutater:
         self.mutate_funcs = MANGLE_FUNCS
         self.mutate_func_count = len(MANGLE_FUNCS)
 
-    def fuzz(self, data):
+    def mutate(self, data):
         # 根据开始设置的最大变异次数进行变异
         for i in xrange(self.mutate_max_count):
             # 随机选取一个变异函数
@@ -35,8 +35,15 @@ class Mutater:
 
 
 if __name__ == '__main__':
-    mutater = Mutater(mutate_count=40)
+    import time
+
+    mutater = Mutater()
     raw = "1234567890abcdefghijklmn"
 
-    while True:
-        hexdump(mutater.fuzz(raw))
+    start = time.time()
+    for i in range(20000):
+        data = mutater.mutate(raw)
+
+    end = time.time()
+
+    print("用时：{}".format(end - start))

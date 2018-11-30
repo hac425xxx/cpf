@@ -11,6 +11,7 @@ import socket
 from time import sleep
 from cpf.protocol.Base import Base
 
+
 class TCPCommunicator(Base):
     """
     实现 tcp 的基础通信
@@ -20,6 +21,8 @@ class TCPCommunicator(Base):
         address = (ip, port)
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.s.connect(address)
+
+        sleep(0.01)
 
     def recv(self, size):
         return self.s.recv(size)

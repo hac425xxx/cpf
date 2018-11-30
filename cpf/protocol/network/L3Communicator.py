@@ -24,8 +24,6 @@ class L3Communicator(Base):
         self.iface = iface
         self.dst = dst
 
-    def recv(self, size):
-        pass
 
     def send(self, data):
         # 首先构造好 以太网层 和 ip 层的数据

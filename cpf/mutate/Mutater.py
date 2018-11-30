@@ -41,7 +41,7 @@ if __name__ == '__main__':
     raw = "1234567890abcdefghijklmn"
 
     start = time.time()
-    for i in range(20000):
+    for i in range(80000):
         data = mutater.mutate(raw)
 
     end = time.time()

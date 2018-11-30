@@ -24,8 +24,6 @@ class L2Communicator(Base):
         """
         self.iface = iface
 
-    def recv(self, size):
-        pass
 
     def send(self, data):
         scapy.sendp(data, iface=self.iface)

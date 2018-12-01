@@ -24,8 +24,11 @@ class TCPCommunicator(Base):
 
         sleep(0.01)
 
-    def recv(self, size):
-        return self.s.recv(size)
+    def recv(self, size, timeout=3.0):
+        self.s.settimeout(timeout)
+        data = self.s.recv(size)
+        self.s.settimeout(None)
+        return data
 
     def send(self, data):
         self.s.send(data)

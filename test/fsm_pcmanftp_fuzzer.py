@@ -11,7 +11,7 @@ trans_data = {}
 
 test_count = 100
 
-with open("data/float_ftp.json", "r") as fp:
+with open("data/pcman_ftp.json", "r") as fp:
     trans_data = json.loads(fp.read())
 
 end_stats = trans_data["end_states"]
@@ -79,7 +79,7 @@ def send(pre_seqs, fuzz_seq):
     retry = 0
     while retry < 3:
         try:
-            p = TCPCommunicator("192.168.245.135", 21)
+            p = TCPCommunicator("192.168.245.131", 21)
             break
         except:
             retry += 1
@@ -109,7 +109,7 @@ def send(pre_seqs, fuzz_seq):
 
     # 重新连接服务器，判断是否存活
     print("check live for {}".format(count))
-    p = TCPCommunicator("192.168.245.135", 21)
+    p = TCPCommunicator("192.168.245.131", 21)
 
     recv = p.recv(1024)
     if welcome_msg not in recv:

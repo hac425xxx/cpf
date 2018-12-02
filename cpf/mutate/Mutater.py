@@ -39,10 +39,13 @@ if __name__ == '__main__':
     mutater = Mutater()
     raw = "1234567890abcdefghijklmn"
 
+    data = []
+
     start = time.time()
-    for i in range(80000):
-        data = mutater.mutate(raw)
+    for i in range(200000):
+        data.append(mutater.mutate(raw))
 
     end = time.time()
 
+    print(len(list(set(data))))
     print("用时：{}".format(end - start))

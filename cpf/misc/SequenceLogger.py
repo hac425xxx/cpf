@@ -17,15 +17,16 @@ class SequenceLogger:
         :return:
         """
 
-        self.log_queue.append(seqs)
+        self.log_queue.append(json.dumps(seqs))
 
     def dump_sequence(self):
-        # 服务以及挂了，打印测试序列
+
+        seqs = []
         while True:
             try:
                 # 一般来说第一个应该就是触发异常的发包序列， 不过为了一些极个别情况，把最近的 3 次发包序列都打印出来
-                test_seq = self.log_queue.pop()
-                print "*" * 20
-                print json.dumps(test_seq)
+                seqs.append(json.loads(self.log_queue.pop()))
             except:
                 break
+
+        print json.dumps(seqs)

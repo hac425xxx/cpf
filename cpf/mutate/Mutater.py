@@ -8,8 +8,7 @@
 @desc: 提供一个接口，调用各种变异算法，完成数据变异
 """
 from mangle import MANGLE_FUNCS
-import random
-from utils import *
+from cpf.misc.utils import *
 
 
 class Mutater:

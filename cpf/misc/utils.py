@@ -129,6 +129,22 @@ def replace_string(src, replacement='', index=0):
     return src[:index] + replacement + src[index + rlen:]
 
 
+def generate_preseqs(trans, idx):
+    """
+    利用 trans 生成到待测状态 idx, 需要的前序包
+    :param trans: 所有的 trans 字典
+    :param idx: 待测状态的索引
+    :return:[{"send":"xxx", "recv":"kkkk"}]
+    """
+    seqs = []
+    for i in xrange(idx):
+        seq = {}
+        seq['send'] = trans[i]['send']
+        seq['recv'] = trans[i]['recv']
+        seqs.append(seq)
+    return seqs
+
+
 if __name__ == '__main__':
     src = "123456789"
     # for i in range(10):

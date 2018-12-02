@@ -7,8 +7,7 @@
 @time: 2018/11/3 18:50
 @desc: 实现各种变异函数
 """
-import random
-from utils import *
+from cpf.misc.utils import *
 
 MANGLE_FUNCS = {
     0: lambda data: mangle_resize(data),

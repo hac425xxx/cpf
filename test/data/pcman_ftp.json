@@ -7,7 +7,7 @@
     "send/recv 表示要从 state 转换到 next_state 需要的交互数据包， 16进制表示, 其中 recv 只需要接收数据的一部分即可"
   ],
   "end_states": [
-    "3"
+    "4"
   ],
   "welcome_msg": "536572766572",
   "trans": [

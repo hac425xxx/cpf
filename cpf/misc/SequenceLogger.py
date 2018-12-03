@@ -24,9 +24,10 @@ class SequenceLogger:
         seqs = []
         while True:
             try:
-                # 一般来说第一个应该就是触发异常的发包序列， 不过为了一些极个别情况，把最近的 3 次发包序列都打印出来
+                # 把日志队列里面的序列取出保存
                 seqs.append(json.loads(self.log_queue.pop()))
             except:
                 break
 
+        #  seqs 的第一项应该是触发异常的用例
         print json.dumps(seqs)

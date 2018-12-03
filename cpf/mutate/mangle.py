@@ -26,8 +26,53 @@ MANGLE_FUNCS = {
     13: lambda data: mangle_clonebyte(data),
     14: lambda data: mangle_expand(data),
     15: lambda data: mangle_shrink(data),
-    16: lambda data: mangle_insert_rnd(data)
+    16: lambda data: mangle_insert_rnd(data),
+    17: lambda data: mangle_copy_token(data),
+    18: lambda data: mangle_insert_token(data),
 }
+
+TOKEN = []
+
+
+def mangle_copy_token(data):
+    """往随机位置用 token 覆盖数据 """
+    ret = data
+    if TOKEN:
+
+        length = len(data)
+        # 选择一个 token 插入
+        midx = random.randint(0, len(TOKEN) - 1)
+        mlen = len(TOKEN[midx])
+
+        #  如果 选中的 token 的长度大于 data 的长度就不变异了
+        if mlen >= length:
+            return data
+
+        # 获取插入位置, token - mlen 确保不会越界
+        idx = random.randint(0, length - mlen)
+        #  获取 token , 然后插入进去
+        ret = replace_string(data, TOKEN[midx], idx)
+    else:
+        ret = data
+    return ret
+
+
+def mangle_insert_token(data):
+    """
+    往随机位置用 token 覆盖数据
+    """
+    ret = data
+    if TOKEN:
+
+        length = len(data)
+        # 选择一个 token 插入
+        idx = random.randint(0, len(TOKEN) - 1)
+        off_to = random.randint(0, length)
+
+        ret = insert_string(data, TOKEN[idx], off_to)
+    else:
+        ret = data
+    return ret
 
 
 def mangle_resize(data):
@@ -295,7 +340,7 @@ def mangle_mem_insert(data):
     size = random.randint(0, length - 1)
 
     off_from = random.randint(0, length - size)
-    off_to = random.randint(0, length - 1)
+    off_to = random.randint(0, length)
 
     return insert_string(data, data[off_from:off_from + size], off_to)
 
@@ -371,15 +416,18 @@ def mangle_insert_rnd(data):
 
     length = len(data)
     # 获取要填充的数据的长度
-    off = random.randint(0, length - 1)
+    off = random.randint(0, length)
     size = random.randint(0, len(data))
     return insert_string(data, get_random_string(size), off)
 
 
 if __name__ == '__main__':
-    src = "123456789" * 20
+
+    TOKEN = ['\xde\xad\xbe\xef', '\x90\x90\x90\x90']
+
+    src = "123456789" * 10
     print(len(MANGLE_FUNCS))
-    for i in range(100):
+    while True:
         # print(mangle_resize(src))
         # hexdump(mangle_byte(src))
         # hexdump(mangle_bit(src))
@@ -397,5 +445,7 @@ if __name__ == '__main__':
         # hexdump(mangle_expand(src))
         # hexdump(mangle_shrink(src))
         # hexdump(mangle_insert_rnd(src))
+        # hexdump(mangle_copy_token(src))
+        # hexdump(mangle_insert_token(src))
         func = MANGLE_FUNCS[random.randint(0, len(MANGLE_FUNCS) - 1)]
-        hexdump(func(src))
+        func(src)

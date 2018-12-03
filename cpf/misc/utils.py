@@ -105,7 +105,7 @@ def insert_string(src, str_to_insert, index):
     """
 
     # 如果 index 越界就返回空
-    if index >= len(src):
+    if index > len(src):
         return ""
 
     return src[:index] + str_to_insert + src[index:]

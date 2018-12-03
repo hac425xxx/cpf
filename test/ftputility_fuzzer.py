@@ -5,6 +5,7 @@ from cpf.fuzzer.TCPFuzzer import TCPFuzzer
 
 
 def fuzz_cwd(data):
+    # 将变异后的数据增加到被测命令的后面
     return "CWD " + data
 
 

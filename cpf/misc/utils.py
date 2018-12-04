@@ -152,6 +152,7 @@ def generate_preseqs(trans, idx):
 def check_tcp_port(host, port):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     result = sock.connect_ex((host, port))
+    sock.close()
     if result == 0:
         return True
     else:

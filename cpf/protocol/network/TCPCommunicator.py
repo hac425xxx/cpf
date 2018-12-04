@@ -17,10 +17,28 @@ class TCPCommunicator(Base):
     实现 tcp 的基础通信
     """
 
-    def __init__(self, ip, port):
+    def __init__(self, ip, port, interval=0, retry_interval=0.3):
+        """
+
+        :param ip: 目标 ip
+        :param port: 目标端口
+        :param interval: 每次发包的间隔，会在 send 前 sleep 一下
+        :param retry_interval: 出现连接错误时等待的时间间隔， 实际等待时间： retry_interval * count
+        """
         address = (ip, port)
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.connect(address)
+        count = 1
+        while count <= 3:
+            try:
+                self.s.connect(address)
+                break
+            except Exception as e:
+                # print e
+                # print("连接失败，{} 秒后尝试重连!!!".format(retry_interval * count))
+                sleep(retry_interval * count)
+                count += 1
+
+        self.interval = interval
 
         sleep(0.01)
 
@@ -31,6 +49,7 @@ class TCPCommunicator(Base):
         return data
 
     def send(self, data):
+        sleep(self.interval)
         self.s.send(data)
         pass
 

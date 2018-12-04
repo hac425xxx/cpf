@@ -6,8 +6,9 @@ from cpf.fuzzer.TCPFuzzer import TCPFuzzer
 if __name__ == '__main__':
 
     fuzzer = TCPFuzzer(host="192.168.245.135", port=27700,
-                       nomal_trans_conf="conf/seigmodbus.json",
-                       logseq_count=3)
+                       nomal_trans_conf="../conf/seigmodbus.json",
+                       sample_path="../sample/common/",
+                       logseq_count=3, interval=0.02)
 
     relay = False
 
@@ -21,4 +22,4 @@ if __name__ == '__main__':
                   "send": "00AA00BB00CC00DD00DD0ADFA0D0F0ADF0A0DF0ADFA8D0F80808134813417350183417329471938510"}]]
 
     for seq in seqs:
-        fuzzer.replay(seq)
+        fuzzer.check_vuln(seq)

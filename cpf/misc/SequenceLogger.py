@@ -30,4 +30,5 @@ class SequenceLogger:
                 break
 
         #  seqs 的第一项应该是触发异常的用例
-        print json.dumps(seqs)
+        # print json.dumps(seqs)
+        return seqs

@@ -9,6 +9,10 @@
 """
 import random
 from struct import pack, unpack
+import socket
+import scapy.all as scapy
+from time import sleep
+import os
 
 CHAR_LIST = ["\x00", "\x01", "\x02", "\x03", "\x04", "\x05", "\x06", "\x07", "\x08", "\x09", "\x0a", "\x0b", "\x0c",
              "\x0d", "\x0e", "\x0f", "\x10", "\x11", "\x12", "\x13", "\x14", "\x15", "\x16", "\x17", "\x18", "\x19",
@@ -145,12 +149,43 @@ def generate_preseqs(trans, idx):
     return seqs
 
 
+def check_tcp_port(host, port):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    result = sock.connect_ex((host, port))
+    if result == 0:
+        return True
+    else:
+        return False
+
+
+def check_udp_port(host, port):
+    ''' send to /dev/null 2>&1 to suppress terminal output '''
+    res = os.system("nc -vnzu {} {} > /dev/null 2>&1".format(host, port))
+    if res == 0:
+        return True
+    else:
+        return False
+
+
+def check_udp_port_by_recv(host, port):
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.settimeout(2.0)
+        sock.sendto('hx', (host, port))
+        sock.recvfrom(1024)
+        return True
+    except:
+        return False
+
+
 if __name__ == '__main__':
     src = "123456789"
     # for i in range(10):
     #     idx = random.randint(0, len(src) - 1)
     #     print(insert_string(src, "s" * random.randint(0, 33), idx))
 
-    for i in range(len(src)):
-        # print(replace_string(src, "@@@@", random.randint(0, len(src) - 1)))
-        hexdump(get_random_string(299))
+    # for i in range(len(src)):
+    #     # print(replace_string(src, "@@@@", random.randint(0, len(src) - 1)))
+    #     hexdump(get_random_string(299))
+
+    print check_udp_port("192.168.245.135", 9999)

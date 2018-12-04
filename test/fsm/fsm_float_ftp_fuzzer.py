@@ -11,7 +11,7 @@ trans_data = {}
 
 test_count = 100
 
-with open("data/float_ftp.json", "r") as fp:
+with open("conf/float_ftp.json", "r") as fp:
     trans_data = json.loads(fp.read())
 
 end_stats = trans_data["end_states"]

@@ -1,0 +1,21 @@
+{
+  "comment": [
+    "这个标签用于写一些注释",
+    "end_states 为终止状态集合",
+    "trans 定义了一系列的状态转移, state表示当前的状态， next_state表示要迁移到的下一个状态",
+    "welcome_msg 表示连接后服务器给的欢迎消息",
+    "send/recv 表示要从 state 转换到 next_state 需要的交互数据包， 16进制表示, 其中 recv 只需要接收数据的一部分即可"
+  ],
+  "end_states": [
+  ],
+  "welcome_msg": "",
+  "trans": [
+    {
+      "state": "1",
+      "send": "00AA00BB00CC00DD00DD0ADFA0D0F0ADF0A0DF0ADFA8D0F80808134813417350183417329471938510",
+      "recv": "",
+      "next_state": "2"
+    }
+  ]
+}
+

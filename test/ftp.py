@@ -8,7 +8,7 @@ p = remote("192.168.245.135", 21)
 
 p.send("USER free\r\n")
 
-p.recvuntil("free")
+p.recvuntil("331")
 p.send("PASS free\r\n")
 
 p.recvuntil("230")

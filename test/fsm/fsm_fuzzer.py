@@ -8,7 +8,7 @@ trans_data = {}
 
 test_count = 4
 
-with open("data/trans.json", "r") as fp:
+with open("conf/trans.json", "r") as fp:
     trans_data = json.loads(fp.read())
 
 end_stats = trans_data["end_states"]

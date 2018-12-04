@@ -16,17 +16,13 @@ if __name__ == '__main__':
 
     fuzzer = TCPFuzzer(host="192.168.245.135", port=21,
                        sample_path="sample/ftp",
-                       nomal_trans_conf="conf/ftputility.json",
+                       nomal_trans_conf="conf/netek.json",
                        logseq_count=3)
 
     relay = False
 
     if not relay:
-
-        COMMAND = "CWD"
-        print("开始fuzz: {}".format(COMMAND))
-        fuzzer.fuzz(start_state=2, mutate_max_count=10, callback=fuzz_command, max_fuzz_count=90)
-        fuzzer.fuzz_count = 0
+        fuzzer.fuzz(mutate_max_count=10, interval=0)
     else:
 
         seqs = [[{"recv": "66726565", "send": "5553455220667265650D0A"},

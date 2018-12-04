@@ -3,7 +3,7 @@
 import json
 from time import sleep
 from cpf.mutate.Mutater import Mutater
-from cpf.misc.utils import generate_preseqs
+from cpf.misc.utils import *
 from cpf.misc.SequenceLogger import SequenceLogger
 from cpf.protocol.network.TCPCommunicator import TCPCommunicator
 import random, os
@@ -60,9 +60,11 @@ class TCPFuzzer:
         # 计数器，记录 fuzz 次数
         self.fuzz_count = 0
 
-    def fuzz(self, start_state=0, callback=None, mutate_max_count=25, perseq_testcount=200):
+    def fuzz(self, interval=0.1, start_state=0, callback=None, mutate_max_count=25, perseq_testcount=200,
+             max_fuzz_count=None):
         """
 
+        :param interval: 每次发包的间隔时间， sleep(.)
         :param start_state:
         :param callback: 函数指针，用于对数据进行修正， 接收一个参数（变异后的数据）， 返回 修正过的数据
         :param mutate_max_count:
@@ -74,6 +76,9 @@ class TCPFuzzer:
         self.mutater = Mutater(mutate_max_count=mutate_max_count, callback=callback)
 
         while True:
+
+            if max_fuzz_count and max_fuzz_count <= self.fuzz_count:
+                return True
 
             # 遍历整个 trans
             for i in xrange(start_state, len(self.trans)):
@@ -91,14 +96,16 @@ class TCPFuzzer:
                 fuzz_seq = {}
 
                 # 计算每个状态 fuzz 的次数
-
-                test_count = int(self.perseq_testcount * (i + 1) * 0.8)
+                if max_fuzz_count:
+                    test_count = max_fuzz_count / len(self.trans)
+                else:
+                    test_count = int(self.perseq_testcount * (i + 1) * 0.8)
 
                 for c in xrange(test_count):
                     # 生成变异后的数据包
                     raw = init_case
                     sample = {}
-                    if random.randint(0, 1):
+                    if self.samples and random.randint(0, 1):
                         sample = random.choice(self.samples)
                         path = sample['path']
                         sample['hit'] += 1
@@ -119,7 +126,7 @@ class TCPFuzzer:
                     test_seqs.append(fuzz_seq)
 
                     try:
-                        # sleep(0.1)
+                        sleep(interval)
                         # 发送测试序列
                         self.send_seqs(test_seqs)
 
@@ -127,12 +134,13 @@ class TCPFuzzer:
                         # 检测是否存活
                         if not self.is_alive():
                             self.logger.dump_sequence()
+                            print("测试: {} 次".format(self.fuzz_count))
                             exit(0)
 
                     except Exception as e:
                         self.logger.dump_sequence()
                         print "发送数据包时异常, {}".format(e)
-                        # exit(0)
+                        exit(0)
 
     def send_seqs(self, test_seqs):
 
@@ -161,21 +169,26 @@ class TCPFuzzer:
 
         del p
 
-    def is_alive(self):
-
-        try:
-            p = TCPCommunicator(self.host, self.port)
-            # 如果服务器有欢迎消息，即欢迎消息非空，就先接收欢迎消息
-            if self.welcome_msg:
-                # 获取欢迎消息
-                data = p.recv(1024)
-                while self.welcome_msg not in data:
+    def is_alive(self, check_type=1):
+        if check_type:
+            if check_tcp_port(self.host, self.port):
+                return True
+            else:
+                return False
+        else:
+            try:
+                p = TCPCommunicator(self.host, self.port)
+                # 如果服务器有欢迎消息，即欢迎消息非空，就先接收欢迎消息
+                if self.welcome_msg:
+                    # 获取欢迎消息
                     data = p.recv(1024)
-            del p
-            return True
-        except Exception as e:
-            print e
-            return False
+                    while self.welcome_msg not in data:
+                        data = p.recv(1024)
+                del p
+                return True
+            except Exception as e:
+                print e
+                return False
 
     def replay(self, seqs):
 
@@ -190,18 +203,18 @@ class TCPFuzzer:
 if __name__ == '__main__':
     # fuzzer = TCPFuzzer(host="192.168.245.131", port=21,
     #                    sample_path="../../test/sample/ftp",
-    #                    nomal_trans_conf="../../test/data/coreftp.json",
+    #                    nomal_trans_conf="../../test/conf/coreftp.json",
     #                    logseq_count=5)
 
     fuzzer = TCPFuzzer(host="192.168.245.135", port=21,
                        sample_path="../../test/sample/ftp",
-                       nomal_trans_conf="../../test/data/ftputility.json",
+                       nomal_trans_conf="../../test/conf/ftputility.json",
                        logseq_count=5)
 
-    # fuzzer = TCPFuzzer(host="192.168.245.141", port=777, trans_file_path="../../test/data/kingview.json",
+    # fuzzer = TCPFuzzer(host="192.168.245.141", port=777, trans_file_path="../../test/conf/kingview.json",
     #                    mutate_max_count=40)
 
-    # fuzzer = TCPFuzzer(host="192.168.245.131", port=8888, nomal_trans_conf="../../test/data/http.json", logseq_count=3)
+    # fuzzer = TCPFuzzer(host="192.168.245.131", port=8888, nomal_trans_conf="../../test/conf/http.json", logseq_count=3)
 
     relay = False
 

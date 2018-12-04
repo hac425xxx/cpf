@@ -6,7 +6,7 @@ from cpf.protocol.network.TCPCommunicator import TCPCommunicator
 
 seqs = None
 
-with open("data/pcman_crash.json") as fp:
+with open("conf/pcman_crash.json") as fp:
     seqs = json.loads(fp.read())
 
 p = TCPCommunicator("192.168.245.131", 21)

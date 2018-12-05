@@ -17,7 +17,7 @@ class TCPCommunicator(Base):
     实现 tcp 的基础通信
     """
 
-    def __init__(self, ip, port, interval=0, retry_interval=0.3):
+    def __init__(self, ip, port, interval=0, retry_interval=0.3, retry_count=3):
         """
 
         :param ip: 目标 ip
@@ -28,7 +28,7 @@ class TCPCommunicator(Base):
         address = (ip, port)
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         count = 1
-        while count <= 3:
+        while count <= retry_count:
             try:
                 self.s.connect(address)
                 break
@@ -38,11 +38,13 @@ class TCPCommunicator(Base):
                 sleep(retry_interval * count)
                 count += 1
 
+        if count > 3:
+            raise Exception("创建连接失败， 请确定目标服务已经开启")
         self.interval = interval
 
         sleep(0.01)
 
-    def recv(self, size, timeout=3.0):
+    def recv(self, size, timeout=2.0):
         self.s.settimeout(timeout)
         data = self.s.recv(size)
         self.s.settimeout(None)

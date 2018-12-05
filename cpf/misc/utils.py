@@ -112,6 +112,9 @@ def insert_string(src, str_to_insert, index):
     if index > len(src):
         return ""
 
+    if index == len(src):
+        return src + str_to_insert
+
     return src[:index] + str_to_insert + src[index:]
 
 
@@ -150,6 +153,12 @@ def generate_preseqs(trans, idx):
 
 
 def check_tcp_port(host, port):
+    """
+    检测 tcp 端口是否开放
+    :param host:
+    :param port:
+    :return: 如果端口开放返回 True
+    """
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     result = sock.connect_ex((host, port))
     sock.close()

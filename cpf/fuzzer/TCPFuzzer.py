@@ -16,20 +16,68 @@ class TCPFuzzer:
 
         :param host: 目标的 ip
         :param port: 目标的端口
-        :param nomal_trans_conf: 一个正常交互过程的序列配置文件
+        :param nomal_trans_conf: 交互序列配置文件，可以是目录，或者文件全路径
         :param logseq_count: 记录最近多少次的样本
         :param mutate_max_count: 变异的最大次数
         :param perseq_testcount: 一次循环对每个状态的变异测试
         """
         # 从交互配置文件里面导入状态信息
-        with open(nomal_trans_conf, "r") as fp:
-            trans_data = json.loads(fp.read())
-            self.end_stats = trans_data["end_states"]
-            self.welcome_msg = trans_data["welcome_msg"].decode("hex")
-            self.trans = trans_data["trans"]
+
+        # state_data 是一个数组，每一项代码每个状态下可选数据集合
+        self.state_data = []
+        # 一个数组，每一项都是一个完整的交互序列
+        self.trans = []
+        #  如果是目录的话，就加载目录下的所有交互文件，然后合并每个状态下的交互过程， 用来后续 fuzz 时做种子
+        if os.path.isdir(nomal_trans_conf):
+            trans_contents = []
+            for fname in os.listdir(nomal_trans_conf):
+                with open(os.path.join(nomal_trans_conf, fname), "r") as fp:
+                    content = json.loads(fp.read())
+                    self.welcome_msg = content["welcome_msg"].decode("hex")
+                    tran = {
+                        "file": fname,
+                        "trans": content['trans']
+                    }
+                    # 保存每个完整的交互序列，用于后续 fuzz
+                    self.trans.append(tran)
+                    trans_contents.append(content)
+
+            # 下面是合并个状态的交互过程，用来给 fuzz 做种子
+            for t in trans_contents:
+                for i, s in enumerate(t['trans']):
+                    if len(self.state_data) > i:
+                        if s not in self.state_data[i]:
+                            self.state_data[i].append(s)
+                    else:
+                        self.state_data.append([s])
+
+        else:
+
+            # 当提供的是一个文件的情况
+            with open(nomal_trans_conf, "r") as fp:
+                content = json.loads(fp.read())
+                self.welcome_msg = content["welcome_msg"].decode("hex")
+                tran = {
+                    "file": os.path.basename(nomal_trans_conf),
+                    "trans": content['trans']
+                }
+
+                self.trans.append(tran)
+                self.state_data = []
+
+                for i, s in enumerate(content["trans"]):
+                    if len(self.state_data) > i:
+                        if s not in self.state_data[i]:
+                            self.state_data[i].append(s)
+                    else:
+                        self.state_data.append([s])
+
+        # print json.dumps(self.state_data)
 
         self.samples = []
         self.token = []
+
+        # 加载以后漏洞库的样本路径， 用于 fuzz 时的 种子
         if sample_path:
 
             if os.path.exists(os.path.join(sample_path, "token.json")):
@@ -85,47 +133,52 @@ class TCPFuzzer:
             if max_fuzz_count and max_fuzz_count <= self.fuzz_count:
                 return True
 
-            # 遍历整个 trans
-            for i in xrange(start_state, len(self.trans)):
+            # 首先随机取一个完整的交互序列
+            tran = random.choice(self.trans)['trans']
+
+            # 对这个交互序列下的所有状态进行遍历 fuzz
+            for i in xrange(start_state, len(tran)):
 
                 if self.fuzz_count % 10000:
                     self.mutater.mutate_max_count += 1
 
-                print("当前fuzz状态: {}, 此时已经fuzz {} 次".format(self.trans[i]['state'], self.fuzz_count))
+                print("当前fuzz状态: {}, 此时已经fuzz {} 次".format(i + 1, self.fuzz_count))
 
-                init_case = self.trans[i]['send'].decode("hex")
-
-                # 到达生成当前状态的前序数据包
-                pre_seqs = generate_preseqs(self.trans, i)
-
+                # 到达生成当前状态 i 的前序数据包
+                pre_seqs = generate_preseqs(tran, i)
                 fuzz_seq = {}
 
                 # 计算每个状态 fuzz 的次数
                 if max_fuzz_count:
-                    test_count = max_fuzz_count / len(self.trans)
+                    test_count = max_fuzz_count / len(tran)
                 else:
                     test_count = int(self.perseq_testcount * (i + 1) * 0.8)
 
                 for c in xrange(test_count):
                     # 生成变异后的数据包
-                    raw = init_case
+
+                    raw = random.choice(self.state_data[i])['send'].decode("hex")
+                    fuzz_seq['recv'] = tran[i]['recv']
+
                     sample = {}
-                    if self.samples and random.randint(0, 1):
+                    # 根据随机， 看是否用漏洞库里的样本做种子
+                    if self.samples and random.randint(0, 2) > 1:
                         sample = random.choice(self.samples)
                         path = sample['path']
                         sample['hit'] += 1
                         with open(path, 'rb') as fp:
                             raw = fp.read()
 
+                    #  如果种子文件是样本，且是第一次使用，就直接重放
                     if sample and i not in sample['state']:
                         fuzz_seq['send'] = raw.encode('hex')
                         sample['state'].append(i)
                     else:
+                        # 否则直接变异
                         fuzz_seq['send'] = self.mutater.mutate(raw).encode("hex")
 
-                    fuzz_seq['recv'] = self.trans[i]['recv']
-
                     # 由于 python 指针传值的原因，需要重新生成对象，避免出现问题
+                    # 生成完整的一个 测试序列
                     test_seqs = []
                     test_seqs += pre_seqs
                     test_seqs.append(fuzz_seq)
@@ -134,37 +187,49 @@ class TCPFuzzer:
                         print("*" * 20)
                         print("发送数据失败次数已达上限，服务貌似已经挂了， 退出")
                         print("*" * 20)
-                        exit(0)
+                        raise Exception("服务貌似已经挂了， 退出")
 
                     # 发送测试序列
-                    if not self.send_seqs(test_seqs):
-
-                        sleep(0.5)
+                    if not self.send_to_target(test_seqs):
+                        # 如果发送序列失败判断下 服务器是否存活
+                        # sleep(0.5)
                         # 如果已经挂了，就重放最近的流量确认不是由于并发导致的原因
                         if not self.is_alive():
+
+                            # 如果不存活了就认为触发了异常， 保存最近的测试序列
                             seqs = self.logger.dump_sequence()
+
+                            # 休息一段时间，然后重放测试用例
                             sleep(1.0 * self.exception_count)
+                            print("出现异常，下面重放最近的序列，确定异常")
                             if self.check_again(seqs):
                                 print("测试: {} 次, 异常序列: {}".format(self.fuzz_count, json.dumps(seqs)))
+                                raise Exception("服务貌似已经挂了， 退出")
 
                     else:
-
+                        #
+                        # if not self.is_alive():
+                        #     # 如果不存活了就认为触发了异常， 保存最近的测试序列
+                        #     seqs = self.logger.dump_sequence()
+                        #     # 休息一段时间，然后重放测试用例
+                        #     sleep(1.0 * self.exception_count)
+                        #     if self.check_again(seqs):
+                        #         print("测试: {} 次, 异常序列: {}".format(self.fuzz_count, json.dumps(seqs)))
+                        #         raise Exception("服务貌似已经挂了， 退出")
                         if self.exception_count > 2:
                             self.exception_count -= 2
 
-    def send_seqs(self, test_seqs):
+    def send_to_target(self, test_seqs):
         """
         发送数据包序列
         :param test_seqs:
         :return: 如果发送成功返回 True, 失败返回 False
         """
-        self.fuzz_count += 1
 
         #  发送数据包序列前，把当前要发送序列存入 最大长度为 3 的队列里面， 用于后续记录日志
 
         try:
             p = TCPCommunicator(self.host, self.port, interval=self.interval)
-
             self.logger.add_to_queue(test_seqs)
             # 如果服务器有欢迎消息，即欢迎消息非空，就先接收欢迎消息
             if self.welcome_msg:
@@ -186,12 +251,20 @@ class TCPFuzzer:
             p.send(test_seqs[-1]['send'].decode('hex'))
 
             del p
+            self.fuzz_count += 1
+
             return True
         except Exception as e:
+            print e
             self.exception_count += 1
             return False
 
     def is_alive(self):
+        """
+        判断目标是否存活
+        :return: 如果存活返回 True, 否则返回 False
+        """
+        # 首先检查端口是否开放
         if check_tcp_port(self.host, self.port):
             try:
                 p = TCPCommunicator(self.host, self.port)
@@ -204,7 +277,7 @@ class TCPFuzzer:
                 del p
                 return True
             except Exception as e:
-                # raise e
+                print e
                 self.exception_count += 1
                 return False
         else:
@@ -216,21 +289,23 @@ class TCPFuzzer:
         :param trans:
         :return: 如果返回 True 说明目标已经挂，
         """
+
+        if not self.is_alive():
+            return True
+
         #  首先遍历 trans , 因为传入的 trans 是有 logger dump出来的最近几次的发包序列
         # 这里对每次的发包序列进行重放
         for seqs in trans:
             # 如果测试目标已经挂了，就不用重放了
-            if self.is_alive():
-                try:
-                    sleep(1.0 * self.exception_count)
-                    self.send_seqs(seqs)
-                    # 检测是否存活
-                    if not self.is_alive():
-                        return True
-                except Exception as e:
-                    print e
+
+            try:
+                sleep(1.0 * self.exception_count)
+                self.send_to_target(seqs)
+                # 检测是否存活
+                if not self.is_alive():
                     return True
-            else:
+            except Exception as e:
+                print e
                 return True
 
         return False
@@ -241,8 +316,8 @@ class TCPFuzzer:
         :param seqs: 一个完成的交互数据包序列
         :return: 如果漏洞存在返回 True
         """
-        if self.send_seqs(seqs):
-            # print("发包成功，下面测试服务是否存活")
+        if self.send_to_target(seqs):
+            print("发包成功，下面测试服务是否存活")
 
             if self.is_alive():
                 return False
@@ -251,29 +326,21 @@ class TCPFuzzer:
 
 
 if __name__ == '__main__':
-    # fuzzer = TCPFuzzer(host="192.168.245.131", port=21,
-    #                    sample_path="../../test/sample/ftp",
-    #                    nomal_trans_conf="../../test/conf/coreftp.json",
-    #                    logseq_count=5)
+    fuzzer = TCPFuzzer("192.168.245.131", 21, nomal_trans_conf="../../test/conf/floatftp/", interval=0)
 
-    fuzzer = TCPFuzzer(host="192.168.245.135", port=21,
-                       sample_path="../../test/sample/ftp",
-                       nomal_trans_conf="../../test/conf/ftputility.json",
-                       logseq_count=5)
+    fuzzer.fuzz()
 
-    # fuzzer = TCPFuzzer(host="192.168.245.141", port=777, trans_file_path="../../test/conf/kingview.json",
-    #                    mutate_max_count=40)
+    maybe_crash_seqs = [[{"recv": "50617373776f7264207265717569726564", "send": "5553455220667265650D0A"},
+                         {"recv": "6c6f6767656420696e", "send": "5041535320667265650D0A"},
+                         {"recv": "", "send": "808080808080808080808080810d09"}],
+                        [{"recv": "50617373776f7264207265717569726564", "send": "5553455220667265650D0A"},
+                         {"recv": "6c6f6767656420696e", "send": "5041535320667265650D0A"}, {"recv": "",
+                                                                                            "send": "7f7f7f7f7f7f7f7f202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020212020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020297cd9e9749d50e97dc5ee923d5b5fb2f2a483a3330c02556ea0e7fddf695a59334f63fca92db3e2c0c6f48d0f23f4ca58a3c28667fc78cf852c0ae4a20197b497bbfccc7620266b395ec53e35b2e716f5718678f42c9d6980fb721212eea0198fdf7b6a5d14619c03de5d9740b8ae48e49d298914de7b6e18b94ca4ff9f5f65bd78a7617aa52a1d2fd0fbfbf58e2a337a1ec6a922917723d8a09d53f52d31536495621aa8941f44e8a19209ca43e31fccc717febc9d4a8b5f47e51b3b378040c9bd906b8dacc62fa6fe5daa50bf8e0571e1e8807b4230ced64bd8d267f22aac99e7eb36da1175dd3ee99c3c6b104cb98c8e484da3907021e694c9ef4df4930c7f9f6c938338166f21bbb7da81e012b360b79cd3e4e21c44bd0595d23662bd87a275d90a464bd4a6641f2dadb1a5a2aa1b62180ac091893b71b16a8f8b174e3f632730a83a13429309f5ae1016eaa62d1b757287a3aa73bc0288b3b94079f5de7d97c209d4954597e74159cf8d81fbb64d1553523e4be74eb61504f92c8d7d2a89fdec7b7396885163e81ec45bf7be7ffb0939f8cd077604620080d1bd7bbba8b1f5f1b1c19dcf19386ff0ac098c0dbad7126a4ba2038242ab1ecdff94838a4e74b18a14b505640290ecf1197569f9aa82e782c089b0e90699e7363e5a24c0fa739e7e14f228fa7fd24b9ced32b4e8a8fe210c119aed33230de388a5e0d5d9b4377052cb2818cc787c30b62da711db8d4082c9d1dc386629807f9eaf2e3ff45bd495028459e25fb157bf6da51ff6de499fabcfc3fcc7e6a9f77b9a1b2648a3ae8ffa59c2608db54820202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020207f7f7f7f7f7f7f7f7f7f7f7f7f7f7f00"}],
+                        [{"recv": "50617373776f7264207265717569726564", "send": "5553455220667265650D0A"},
+                         {"recv": "6c6f6767656420696e", "send": "5041535320667265650D0A"}, {"recv": "",
+                                                                                            "send": "2020202020202021202020202020202020202020202120202020202120202020202000de20200000000000000180202020202020"}]]
 
-    # fuzzer = TCPFuzzer(host="192.168.245.131", port=8888, nomal_trans_conf="../../test/conf/http.json", logseq_count=3)
-
-    relay = False
-
-    if not relay:
-        fuzzer.fuzz(start_state=2, mutate_max_count=10)
-    else:
-
-        seqs = [[{"recv": "70617373776f7264",
-                  "send": "4c49535420414141414141417730307477303074e431cef321327aaa919ab5d42a5a747914785a93d78f782e3e3063f75cd78f782e3e3063f75c597f87dfff8f22f48668d378332420202020202020202020202020202020fe202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020203420202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202041414141414141202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202034202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020"}]]
-
-        for seq in seqs:
-            fuzzer.check_vuln(seq)
+    for seq in maybe_crash_seqs:
+        if fuzzer.check_vuln(seq):
+            print json.dumps(seq)
+            exit(0)

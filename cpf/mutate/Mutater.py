@@ -52,13 +52,14 @@ if __name__ == '__main__':
     import time
 
     mutater = Mutater()
-    raw = "1234567890abcdefghijklmn"
+    raw = "a" * 4000
 
     data = []
 
     start = time.time()
-    for i in range(200000):
-        hexdump(mutater.mutate(raw))
+    for i in range(20000):
+        for i in range(200000):
+            ret = mutater.mutate(raw)
 
     end = time.time()
 

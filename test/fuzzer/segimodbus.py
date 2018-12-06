@@ -46,6 +46,8 @@ if __name__ == '__main__':
 
         # exit(0)
 
+
+
         for seq in seqs:
             sleep(0.6)
             if fuzzer.check_vuln(seq):

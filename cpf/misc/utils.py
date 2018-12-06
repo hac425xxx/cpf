@@ -47,15 +47,22 @@ def u8(d):
     return unpack('<B', d)[0]
 
 
-def p16(d):
+def p16(d, big_endian=False):
     """Return d packed as 16-bit unsigned integer (little endian)."""
     d = d & 0xffff
-    return pack('<H', d)
+    if big_endian:
+        return pack('>H', d)
+    else:
+        return pack('<H', d)
 
 
-def u16(d):
+def u16(d, big_endian=False):
     """Return the number represented by d when interpreted as a 16-bit unsigned integer (little endian)."""
-    return unpack('<H', d)[0]
+
+    if big_endian:
+        return unpack('>H', d)[0]
+    else:
+        return unpack('<H', d)[0]
 
 
 def p32(d):
@@ -198,4 +205,6 @@ if __name__ == '__main__':
     #     # print(replace_string(src, "@@@@", random.randint(0, len(src) - 1)))
     #     hexdump(get_random_string(299))
 
-    print check_udp_port("192.168.245.135", 9999)
+    # print check_udp_port("192.168.245.135", 9999)
+
+    hexdump(p16(len("a" * 0x1234) - 1))

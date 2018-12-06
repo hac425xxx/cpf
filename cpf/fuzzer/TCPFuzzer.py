@@ -183,39 +183,40 @@ class TCPFuzzer:
                     test_seqs += pre_seqs
                     test_seqs.append(fuzz_seq)
 
-                    if self.exception_count > 6:
-                        print("*" * 20)
-                        print("发送数据失败次数已达上限，服务貌似已经挂了， 退出")
-                        print("*" * 20)
-                        raise Exception("服务貌似已经挂了， 退出")
-
                     # 发送测试序列
                     if not self.send_to_target(test_seqs):
                         # 如果发送序列失败判断下 服务器是否存活
                         # sleep(0.5)
                         # 如果已经挂了，就重放最近的流量确认不是由于并发导致的原因
-                        if not self.is_alive():
 
+                        print("序列发送失败，下面 sleep 一下，让服务器休息会")
+                        # 休息一段时间，然后重放测试用例
+                        sleep(1.0 * self.exception_count)
+                        self.exception_count += 1
+
+                        if self.exception_count > 6:
+                            print("*" * 20)
+                            print("发送数据失败次数已达上限，服务貌似已经挂了， 退出")
+
+                            print("*" * 20)
+                            print("测试: {} 次, 异常序列: {}".format(self.fuzz_count, json.dumps(seqs)))
+                            seqs = self.logger.dump_sequence()
+                            raise Exception("服务貌似已经挂了， 退出")
+
+                            # if self.check_again(seqs):
+                            #     print("测试: {} 次, 异常序列: {}".format(self.fuzz_count, json.dumps(seqs)))
+                            #     raise Exception("服务貌似已经挂了， 退出")
+
+                    else:
+                        self.logger.add_to_queue(test_seqs)
+                        if not self.is_alive():
                             # 如果不存活了就认为触发了异常， 保存最近的测试序列
                             seqs = self.logger.dump_sequence()
-
                             # 休息一段时间，然后重放测试用例
                             sleep(1.0 * self.exception_count)
-                            print("出现异常，下面重放最近的序列，确定异常")
                             if self.check_again(seqs):
                                 print("测试: {} 次, 异常序列: {}".format(self.fuzz_count, json.dumps(seqs)))
                                 raise Exception("服务貌似已经挂了， 退出")
-
-                    else:
-                        #
-                        # if not self.is_alive():
-                        #     # 如果不存活了就认为触发了异常， 保存最近的测试序列
-                        #     seqs = self.logger.dump_sequence()
-                        #     # 休息一段时间，然后重放测试用例
-                        #     sleep(1.0 * self.exception_count)
-                        #     if self.check_again(seqs):
-                        #         print("测试: {} 次, 异常序列: {}".format(self.fuzz_count, json.dumps(seqs)))
-                        #         raise Exception("服务貌似已经挂了， 退出")
                         if self.exception_count > 2:
                             self.exception_count -= 2
 
@@ -230,13 +231,15 @@ class TCPFuzzer:
 
         try:
             p = TCPCommunicator(self.host, self.port, interval=self.interval)
-            self.logger.add_to_queue(test_seqs)
+
             # 如果服务器有欢迎消息，即欢迎消息非空，就先接收欢迎消息
             if self.welcome_msg:
                 # 获取欢迎消息
                 data = p.recv(1024)
                 while self.welcome_msg not in data:
                     data = p.recv(1024)
+            else:
+                sleep(0.2)
 
             # 发送前序数据包序列
             for seq in test_seqs[:-1]:
@@ -264,24 +267,36 @@ class TCPFuzzer:
         判断目标是否存活
         :return: 如果存活返回 True, 否则返回 False
         """
+
         # 首先检查端口是否开放
         if check_tcp_port(self.host, self.port):
-            try:
-                p = TCPCommunicator(self.host, self.port)
-                # 如果服务器有欢迎消息，即欢迎消息非空，就先接收欢迎消息
-                if self.welcome_msg:
-                    # 获取欢迎消息
-                    data = p.recv(1024)
-                    while self.welcome_msg not in data:
+            data = ""
+            count = 0
+
+            while count < 3:
+                try:
+                    p = TCPCommunicator(self.host, self.port)
+                    # 如果服务器有欢迎消息，即欢迎消息非空，就先接收欢迎消息
+                    if self.welcome_msg:
+                        # 获取欢迎消息
                         data = p.recv(1024)
-                del p
-                return True
-            except Exception as e:
-                print e
-                self.exception_count += 1
-                return False
-        else:
-            return False
+                        while self.welcome_msg not in data:
+                            data = p.recv(1024)
+                    else:
+                        tran = self.trans[0]['trans']
+                        for s in tran:
+                            p.send(s['send'].decode('hex'))
+                            data = p.recv(1024)
+                            if s['recv'] not in data.encode('hex'):
+                                print("except: {}, actal recv: {}".format(s['recv'], data.encode('hex')))
+                    del p
+                    return True
+                except Exception as e:
+                    count += 1
+                    sleep(0.6)
+                    continue
+        self.exception_count += 1
+        return False
 
     def check_again(self, trans):
         """
@@ -310,7 +325,7 @@ class TCPFuzzer:
 
         return False
 
-    def check_vuln(self, seqs):
+    def check_vuln(self, seqs, wait_time=1):
         """
         通过重放序列来重现漏洞
         :param seqs: 一个完成的交互数据包序列
@@ -318,7 +333,7 @@ class TCPFuzzer:
         """
         if self.send_to_target(seqs):
             print("发包成功，下面测试服务是否存活")
-
+            sleep(wait_time)
             if self.is_alive():
                 return False
             print("噢， 服务挂了")

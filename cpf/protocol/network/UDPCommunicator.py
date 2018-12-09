@@ -8,7 +8,7 @@
 @desc:
 """
 import socket
-
+from time import sleep
 from cpf.protocol.Base import Base
 
 
@@ -17,19 +17,19 @@ class UDPCommunicator(Base):
     实现 udp 的基础通信
     """
 
-    def __init__(self, ip, port):
+    def __init__(self, ip, port, interval=0.1):
         self.address = (ip, port)
         self.s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.interval = interval
 
     def recv(self, size):
-        try:
-            self.s.settimeout(3)
-            data, _ = self.s.recvfrom(size)
-        except socket.timeout:
-            data = ""
+        self.s.settimeout(3)
+        data, _ = self.s.recvfrom(size)
+        self.s.settimeout(None)
         return data
 
     def send(self, data):
+        sleep(self.interval)
         self.s.sendto(data, self.address)
         pass
 
@@ -40,7 +40,9 @@ class UDPCommunicator(Base):
 
 if __name__ == '__main__':
     udp = UDPCommunicator("127.0.0.1", 9999)
-    udp.send("ssssssssssssssssss")
-    print(udp.recv(8))
+    while True:
+        udp.send("ssssssssssssssssss")
+        sleep(0.5)
+    # print(udp.recv(8))
 
     # print(udp.is_dead())

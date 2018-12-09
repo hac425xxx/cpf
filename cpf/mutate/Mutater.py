@@ -27,7 +27,7 @@ class Mutater:
         self.callback = callback
         mangle.TOKEN = token
 
-    def mutate(self, data):
+    def mutate(self, data, maxlen=0xffffffff):
         """
         对 data 进行变异
         :param data:  待变异的数据
@@ -40,6 +40,8 @@ class Mutater:
             # 随机选取一个变异函数
             func = self.mutate_funcs[random.randint(0, self.mutate_func_count - 1)]
             data = func(data)
+            if len(data) >= maxlen:
+                data = data[:maxlen - 1]
 
         if self.callback:
             data = self.callback(data)

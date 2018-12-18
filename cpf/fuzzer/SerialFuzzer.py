@@ -5,17 +5,17 @@ from time import sleep
 from cpf.mutate.Mutater import Mutater
 from cpf.misc.utils import *
 from cpf.misc.SequenceLogger import SequenceLogger
-from cpf.protocol.network.UDPCommunicator import UDPCommunicator
+from cpf.protocol.serial.Serial import Serial
 import random, os
 
 
-class UDPFuzzer:
+class SerialFuzzer:
 
-    def __init__(self, host, port, nomal_trans_conf, sample_path="", logseq_count=3, interval=0.01):
+    def __init__(self, device, baud, nomal_trans_conf, sample_path="", logseq_count=3, interval=0.01):
         """
 
-        :param host: 目标的 ip
-        :param port: 目标的端口
+        :param device: 串口设备地址，比如 /dev/ttyS0
+        :param baud: 波特率
         :param nomal_trans_conf: 交互序列配置文件，可以是目录，或者文件全路径
         :param logseq_count: 记录最近多少次的样本
         :param mutate_max_count: 变异的最大次数
@@ -104,8 +104,8 @@ class UDPFuzzer:
         # 初始化测试序列日志队列，保存最近3次的测试序列
         self.logger = SequenceLogger(maxlen=logseq_count)
 
-        self.host = host
-        self.port = port
+        self.device = device
+        self.baud = baud
 
         self.interval = interval
 
@@ -227,7 +227,7 @@ class UDPFuzzer:
         #  发送数据包序列前，把当前要发送序列存入 最大长度为 3 的队列里面， 用于后续记录日志
 
         try:
-            p = UDPCommunicator(self.host, self.port, interval=self.interval)
+            p = Serial(self.device, self.baud)
 
             # 如果服务器有欢迎消息，即欢迎消息非空，就先接收欢迎消息
             if self.welcome_msg:
@@ -271,7 +271,7 @@ class UDPFuzzer:
 
         while count < 3:
             try:
-                p = UDPCommunicator(self.host, self.port)
+                p = Serial(self.device, self.baud)
                 # 如果服务器有欢迎消息，即欢迎消息非空，就先接收欢迎消息
                 if self.welcome_msg:
                     # 获取欢迎消息
@@ -283,6 +283,9 @@ class UDPFuzzer:
                     for s in tran:
                         p.send(s['send'].decode('hex'))
                         data = p.recv(1024)
+                        if data == "":
+                            raise Exception("time out")
+
                         if s['recv'] not in data.encode('hex'):
                             print("except: {}, actal recv: {}".format(s['recv'], data.encode('hex')))
                 del p
@@ -337,6 +340,6 @@ class UDPFuzzer:
 
 
 if __name__ == '__main__':
-    fuzzer = UDPFuzzer("127.0.0.1", 1111,
-                       nomal_trans_conf="../../test/conf/snmp/snmpv3.json", interval=0.03)
+    fuzzer = SerialFuzzer("/dev/ttyS0", 115200,
+                          nomal_trans_conf="../../test/conf/serial_test.json", interval=0.03)
     fuzzer.fuzz()

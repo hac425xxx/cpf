@@ -11,17 +11,18 @@ import serial
 from time import sleep
 from cpf.protocol.Base import Base
 
+
 class Serial(Base):
     """
     实现 串口 的基础通信
     """
 
-    def __init__(self, device="/dev/ttyS0", baud=9600):
+    def __init__(self, device="/dev/ttyS0", baud=9600, timeout=1):
         """
         :param device:  串口设备
         :param baud:  波特率
         """
-        self.ser = serial.Serial(device, baud)
+        self.ser = serial.Serial(device, baud, timeout=timeout)
         pass
 
     def recv(self, size=0):
@@ -40,7 +41,10 @@ class Serial(Base):
 
 
 if __name__ == '__main__':
-    com = Serial("/dev/ttyS0", 9600)
-    com.send("k" * 8)
-    while True:
-        print(com.recv())
+    from cpf.misc.utils import hexdump
+
+    com = Serial("/dev/ttyS0", 115200)
+    com.send("\xaa\xbb\xcc\xdd\x20\x00\x00\x00\xbb\xcc\xdd")
+
+    data = com.recv(1024)
+    hexdump(data)

@@ -33,17 +33,20 @@ class ControlTransfer(Base):
     def recv(self, size):
         pass
 
-    def send(self, bmRequestType, bRequest, wValue, wIndex, data):
-        """
+    def send(self, data):
 
-        :param bmRequestType:
-        :param bRequest:
-        :param wValue:
-        :param wIndex:
-        :param data:
-        :return:
-        """
-        self.dev.ctrl_transfer(bmRequestType, bRequest, wValue, wIndex, data)
+        if len(data) < 7:
+            return
+        bmRequestType = int(data[0].encode("hex"), 16)
+        bRequest = int(data[1].encode("hex"), 16)
+        wValue = int(data[2:4].encode("hex"), 16)
+        wIndex = int(data[4:6].encode("hex"), 16)
+
+        try:
+            self.dev.ctrl_transfer(bmRequestType, bRequest, wValue, wIndex, data[6:])
+        except:
+            # 因为 发送畸形 control 的包时会报错
+            pass
 
     def is_dead(self):
         try:
@@ -71,11 +74,24 @@ class ControlTransfer(Base):
 
 
 if __name__ == '__main__':
-    con = ControlTransfer(0x0781, 0x5591)
+    con = ControlTransfer(0x18d1, 0x4ee2)
 
     try:
         con.dev.detach_kernel_driver(interface=0)
         usb.util.claim_interface(con.dev, interface=0)
     except:
         pass
-    print(con.is_dead())
+
+    from cpf.mutate.Mutater import Mutater
+    from time import sleep
+
+    mutater = Mutater()
+    while True:
+        data = mutater.mutate("80060100000034343434343434".decode("hex"))
+        con.send(data)
+        if con.is_dead():
+            pass
+            # print "设备挂了"
+        # sleep(0.2)
+
+    # print(con.is_dead())

@@ -249,6 +249,7 @@ class SerialFuzzer:
                     print("*" * 20)
             # 发送 fuzz 数据包， 即最后一个数据包
             p.send(test_seqs[-1]['send'].decode('hex'))
+            p.recv(1024)
 
             del p
             self.fuzz_count += 1
@@ -341,5 +342,5 @@ class SerialFuzzer:
 
 if __name__ == '__main__':
     fuzzer = SerialFuzzer("/dev/ttyS0", 115200,
-                          nomal_trans_conf="../../test/conf/serial_test.json", interval=0.03)
+                          nomal_trans_conf="../../test/conf/serial_test.json")
     fuzzer.fuzz()

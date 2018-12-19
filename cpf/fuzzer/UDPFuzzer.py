@@ -337,6 +337,6 @@ class UDPFuzzer:
 
 
 if __name__ == '__main__':
-    fuzzer = UDPFuzzer("127.0.0.1", 1111,
+    fuzzer = UDPFuzzer("127.0.0.1", 1111, sample_path="../../test/sample/snmp/",
                        nomal_trans_conf="../../test/conf/snmp/snmpv3.json", interval=0.03)
     fuzzer.fuzz()

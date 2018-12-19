@@ -74,7 +74,9 @@ class ControlTransfer(Base):
 
 
 if __name__ == '__main__':
-    con = ControlTransfer(0x18d1, 0x4ee2)
+
+    # con = ControlTransfer(0x0781, 0x5591)  # 闪迪 U 盘
+    con = ControlTransfer(0x18d1, 0x4ee2)  # 闪迪 U 盘
 
     try:
         con.dev.detach_kernel_driver(interface=0)
@@ -86,7 +88,10 @@ if __name__ == '__main__':
     from time import sleep
 
     mutater = Mutater()
+    count = 1
     while True:
+        print "测试：{} 次".format(count)
+        count += 1
         data = mutater.mutate("80060100000034343434343434".decode("hex"))
         con.send(data)
         if con.is_dead():

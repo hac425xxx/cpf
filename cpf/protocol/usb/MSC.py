@@ -92,6 +92,7 @@ class BOMSDevice(BulkPipe):
                 usb.util.CTRL_OUT,
                 usb.util.CTRL_TYPE_CLASS,
                 usb.util.CTRL_RECIPIENT_INTERFACE)
+
             self._device.ctrl_transfer(
                 bmRequestType=bmRequestType,
                 bRequest=0x0ff,

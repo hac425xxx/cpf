@@ -1,10 +1,6 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
 
-import os
-import sys
-import time
-import struct
 
 from scapy.packet import fuzz
 from cpf.protocol.usb.MTP import *
@@ -16,8 +12,8 @@ dev.reset()
 # open a session
 s = dev.new_session()
 cmd = Container() / Operation(OpCode=OpCodes["OpenSession"], Parameter1=s)
-cmd.show2()
 dev.send(cmd)
+
 response = dev.read_response()
 if len(response[0]) != 12 or response[0].Code != ResCodes["OK"]:
     print "Error opening session!"
@@ -32,7 +28,10 @@ while dev.is_alive():
     count += 1
     trans = struct.unpack("I", os.urandom(4))[0]
     r = struct.unpack("H", os.urandom(2))[0]
+
+    # 随机取一个 opcode
     opcode = OpCodes.items()[r % len(OpCodes)][1]
+
     if opcode == OpCodes["CloseSession"]:
         opcode = 0
     cmd = Container() / fuzz(Operation(OpCode=opcode, TransactionID=trans, SessionID=dev.current_session()))

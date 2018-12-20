@@ -3,7 +3,6 @@
 from scapy.packet import Raw, fuzz
 
 from cpf.protocol.usb.CCID import *
-
 import sys
 
 arg = sys.argv[1].split(':')

@@ -213,3 +213,11 @@ class BulkPipe(USBDevice):
         # print self.hex_dump(string)
 
         return string
+
+
+if __name__ == '__main__':
+    bt = BulkPipe("0781", "5591")
+
+    while True:
+        bt.send("s" * 8)
+        print bt.receive(8)

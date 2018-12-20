@@ -9,15 +9,15 @@ arg = sys.argv[1].split(':')
 dev = BOMSDevice(arg[0], arg[1], timeout=1200)
 
 # make sure pipe is clear
+# 做一些清理操作
 dev.boms_reset()
 
 # Read Capacity to get blocksize
 cmd = MSCCBW() / SCSICmd() / ReadCapacity10()
-# cmd.show2()
-# print dev.hex_dump(str(cmd))
 dev.send(cmd)
 reply = dev.read_reply()
 dev.check_status(reply)
+
 if Raw in reply and len(reply[Raw]) == 8:
     data = str(reply[Raw])
     max_lba = struct.unpack(">I", data[:4])[0]
@@ -44,13 +44,14 @@ while dev is not None:
             # cmd.show2()
             print dev.hex_dump(str(cmd))
 
-            # do the test
             try:
                 dev.send(cmd)
                 reply = dev.read_reply()
             except USBException as e:
                 print "Exception: %s while processing command %u" % (e, dev.cur_tag())
                 dev.reset()
+            # do the test
+
 
             # display any data in reply
             if Raw in reply and len(reply) > 0:

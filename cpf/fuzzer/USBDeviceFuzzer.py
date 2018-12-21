@@ -10,6 +10,8 @@ from cpf.protocol.usb.CCID import *
 from cpf.protocol.usb.QCDM import *
 from cpf.protocol.usb.MTP import *
 from cpf.protocol.usb.MSC import *
+from cpf.mutate.Mutater import Mutater
+from cpf.misc.SequenceLogger import SequenceLogger
 
 
 class CtrlFuzzer:
@@ -26,44 +28,51 @@ class CtrlFuzzer:
         self.initq = initq
         self.initv = initv
         self.initvv = initvv
+        self.mutater = Mutater()
+        self.logger = SequenceLogger()
 
     def fuzz(self):
 
-        q = random.randint(self.initq, 0x100)
-        v = random.randint(self.initv, 0x10)
-        vv = random.randint(self.initvv, 0x10)
-        i = random.randint(0, 0x10)
-
-        if q == 3 and vv == 2 and i == 0:  # avoid SET_FEATURE TEST_MODE
-            return
-
-        ii = random.randint(0, 0x10)
-        t = random.randint(0, 0x4)
-        r = random.randint(0, 0x4)
-
-        rt = (t << 5) | r
-        r = q
-
-        v = (v << 8) | vv
-        i = (i << 8) | ii
-
-        for size in (0, 10, 100, 4000):
+        while True:
+            data = self.mutater.mutate("80060100000034343434343434".decode("hex"))
+            if len(data) < 7:
+                continue
+            bmRequestType = int(data[0].encode("hex"), 16)
+            bRequest = int(data[1].encode("hex"), 16)
+            wValue = int(data[2:4].encode("hex"), 16)
+            wIndex = int(data[4:6].encode("hex"), 16)
 
             try:
-                res = self.device.ctrl_transfer(rt & 0x80, r, v, i, bytearray().fromhex(u'ff' * size), timeout=250)
-            except usb.core.USBError as e:
-                if e.backend_error_code != -9 and e.backend_error_code != -1:  # ignore LIBUSB_ERROR_PIPE and LIBUSB_ERROR_IO
-                    pass
-            try:
-                res = self.device.ctrl_transfer(rt | 0x80, r, v, i, size, timeout=250)
+                self.logger.add_to_queue(data.encode("hex"))
+                res = self.device.ctrl_transfer(bmRequestType, bRequest, wValue, wIndex, data[6:], timeout=250)
             except usb.core.USBError as e:
                 if e.backend_error_code != -9 and e.backend_error_code != -1:  # ignore LIBUSB_ERROR_PIPE and LIBUSB_ERROR_IO
                     pass
 
-            if i % 10 == 0:
-                if not self.is_alive():
-                    self.device.reset()
-                    time.sleep(1)
+            if not self.is_alive():
+                print self.logger.dump_sequence()
+                self.device.reset()
+                time.sleep(1)
+
+    def check(self, packets=[]):
+        for data in packets:
+            data = data.decode('hex')
+            bmRequestType = int(data[0].encode("hex"), 16)
+            bRequest = int(data[1].encode("hex"), 16)
+            wValue = int(data[2:4].encode("hex"), 16)
+            wIndex = int(data[4:6].encode("hex"), 16)
+
+            try:
+                self.logger.add_to_queue(data.encode("hex"))
+                res = self.device.ctrl_transfer(bmRequestType, bRequest, wValue, wIndex, data[6:], timeout=250)
+            except usb.core.USBError as e:
+                if e.backend_error_code != -9 and e.backend_error_code != -1:  # ignore LIBUSB_ERROR_PIPE and LIBUSB_ERROR_IO
+                    pass
+
+            if not self.is_alive():
+                print self.logger.dump_sequence()
+                self.device.reset()
+                time.sleep(1)
 
     def is_alive(self):
         res = ""
@@ -86,6 +95,8 @@ class CtrlFuzzer:
             print "\nGET_STATUS returned %u bytes: %s" % (len(res), binascii.hexlify(res))
             return False
 
+        return True
+
 
 class CCIDFuzzer:
     def __init__(self, vid, pid, timeout=2000):
@@ -96,15 +107,15 @@ class CCIDFuzzer:
         :param timeout:
         """
         self.dev = CCIDDevice(vid=hex(vid), pid=hex(pid), timeout=timeout)
+        self.logger = SequenceLogger()
         self.dev.reset()
 
     def fuzz(self):
-        while self.dev.is_alive():
-
-            print "Sending command %u" % (self.dev.cur_seq() + 1)
+        while True:
 
             cmd = CCID(bSeq=self.dev.next_seq(), bSlot=0) / PC_to_RDR_XfrBlock() / fuzz(APDU(CLA=0x80))
-
+            # 做个记录
+            self.logger.add_to_queue(str(cmd).encode("hex"))
             self.dev.send(str(cmd))
             res = self.dev.receive()
 
@@ -120,6 +131,10 @@ class CCIDFuzzer:
                 print "No response to command %u!" % self.dev.cur_seq()
                 cmd.show2()
 
+            if not self.dev.is_alive():
+                print "设备未存活，下面打印最近的发包序列"
+                print self.logger.dump_sequence()
+
 
 class QCDMFuzzer:
     def __init__(self, vid, pid, iface=0):
@@ -130,9 +145,10 @@ class QCDMFuzzer:
         :param iface:
         """
         self.dev = QCDMDevice(vid=hex(vid), pid=hex(pid), iface=iface)
+        self.logger = SequenceLogger()
 
     def fuzz(self):
-        while self.dev.is_alive():
+        while True:
 
             cmd = QCDMFrame() / fuzz(Command()) / Raw(os.urandom(8))
 
@@ -140,8 +156,8 @@ class QCDMFuzzer:
             if cmd.code == 58 or cmd.code == 59:
                 cmd.code = 0
 
-            cmd.show2()
-            print self.dev.hex_dump(str(cmd[Raw]))
+                # 做个记录
+                self.logger.add_to_queue(str(cmd).encode("hex"))
             self.dev.send(str(cmd))
             res = self.dev.receive_response()
 
@@ -153,9 +169,14 @@ class QCDMFuzzer:
                 print "No response to command!"
                 print self.dev.hex_dump(str(res))
 
+            if not self.dev.is_alive():
+                print "设备未存活，下面打印最近的发包序列"
+                print self.logger.dump_sequence()
+
 
 class MTPFuzzer:
     def __init__(self, vid, pid, wait=50, timeout=50):
+        self.logger = SequenceLogger()
         self.dev = MTPDevice(vid=hex(vid), pid=hex(pid), wait=wait, timeout=timeout)
         self.dev.reset()
 
@@ -173,11 +194,7 @@ class MTPFuzzer:
 
     def fuzz(self):
 
-        count = 1
-
-        while self.dev.is_alive():
-            print "测试：{} 次".format(count)
-            count += 1
+        while True:
             trans = struct.unpack("I", os.urandom(4))[0]
             r = struct.unpack("H", os.urandom(2))[0]
 
@@ -189,6 +206,7 @@ class MTPFuzzer:
             cmd = Container() / fuzz(
                 Operation(OpCode=opcode, TransactionID=trans, SessionID=self.dev.current_session()))
 
+            self.logger.add_to_queue(str(cmd).encode("hex"))
             self.dev.send(cmd)
             response = self.dev.read_response(trans)
 
@@ -204,22 +222,26 @@ class MTPFuzzer:
                     else:
                         packet.show()
 
+            if not self.dev.is_alive():
+                print "设备未存活，下面打印最近的发包序列"
+                print self.logger.dump_sequence()
+
 
 class MSCFuzzer:
     def __init__(self, vid, pid, timeout=1200):
         self.dev = BOMSDevice(hex(vid), hex(pid), timeout=timeout)
-
-        # make sure pipe is clear
-        # 做一些清理操作
+        self.logger = SequenceLogger()
+        # 初始化 pipe
         self.dev.boms_reset()
 
-        # Read Capacity to get blocksize
+        # 利用 ReadCapacity 指令，获取设备的信息
         cmd = MSCCBW() / SCSICmd() / ReadCapacity10()
         self.dev.send(cmd)
         reply = self.dev.read_reply()
         self.dev.check_status(reply)
 
         if Raw in reply and len(reply[Raw]) == 8:
+            # 获取到 一些设备的信息，
             data = str(reply[Raw])
             max_lba = struct.unpack(">I", data[:4])[0]
             block_size = struct.unpack(">I", data[4:])[0]
@@ -233,27 +255,26 @@ class MSCFuzzer:
     def fuzz(self):
 
         opcode = 0x95
-        while self.dev is not None:
+        while True:
             try:
                 opcode += 1
                 test = 0
                 while test < 100:
                     test += 1
 
+                    # 生成测试数据
                     r = struct.unpack("I", os.urandom(4))[0]
-                    print "\nSending command %u with random value %x" % (self.dev.cur_tag() + 1, r)
                     cmd = MSCCBW(ReqTag=self.dev.next_tag(), ExpectedDataSize=r) / SCSICmd(OperationCode=opcode) / Raw(
                         os.urandom(r % 20))
-                    # cmd.show2()
-                    print self.dev.hex_dump(str(cmd))
 
+                    # 发送到目标
                     try:
+                        # 添加到日志
+                        self.logger.add_to_queue(str(cmd).encode("hex"))
                         self.dev.send(cmd)
                         reply = self.dev.read_reply()
                     except USBException as e:
-                        print "Exception: %s while processing command %u" % (e, self.dev.cur_tag())
                         self.dev.reset()
-                    # do the test
 
                     # display any data in reply
                     if Raw in reply and len(reply) > 0:
@@ -274,6 +295,10 @@ class MSCFuzzer:
                 print "Exception: %s in command loop, resetting!" % e
                 self.dev.reset()
 
+            if not self.dev.is_alive():
+                print "设备未存活，下面打印最近的发包序列"
+                print self.logger.dump_sequence()
+
 
 class USBDeviceFuzzer:
     def __init__(self):
@@ -281,4 +306,19 @@ class USBDeviceFuzzer:
 
 
 if __name__ == '__main__':
-    pass
+    # 0781:5591
+
+    # fuzzer = CtrlFuzzer(0x0781, 0x5591)
+
+    #  18d1:4ee2
+    fuzzer = MTPFuzzer(0x18d1, 0x4ee2)
+
+    # fuzzer.check([u'06013a000000343400344b34343434', u'8006c0810000343434343434c200e9260134',
+    #               u'80060100000034343434343434000034'])
+
+    fuzzer.fuzz()
+    #
+    # for i in range(10):
+    #     data = str(fuzz(APDU(CLA=0x80)))
+    #     print "*" * 0x14
+    #     hexdump(data)

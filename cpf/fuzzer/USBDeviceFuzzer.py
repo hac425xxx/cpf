@@ -6,12 +6,13 @@ import random
 import usb.core
 import binascii
 from scapy.packet import Raw, fuzz
+from cpf.mutate.Mutater import Mutater
+from cpf.misc.SequenceLogger import SequenceLogger
 from cpf.protocol.usb.CCID import *
 from cpf.protocol.usb.QCDM import *
 from cpf.protocol.usb.MTP import *
 from cpf.protocol.usb.MSC import *
-from cpf.mutate.Mutater import Mutater
-from cpf.misc.SequenceLogger import SequenceLogger
+
 
 
 class CtrlFuzzer:

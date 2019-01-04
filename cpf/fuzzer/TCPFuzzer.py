@@ -16,10 +16,10 @@ class TCPFuzzer:
 
         :param host: 目标的 ip
         :param port: 目标的端口
-        :param nomal_trans_conf: 交互序列配置文件，可以是目录，或者文件全路径
+        :param nomal_trans_conf: 交互序列配置文件，可以是目录，或者文件全路径， 如果是目录就加载目录下的所有交互
+        :param sample_path: 历史漏洞样本目录路径
         :param logseq_count: 记录最近多少次的样本
-        :param mutate_max_count: 变异的最大次数
-        :param perseq_testcount: 一次循环对每个状态的变异测试
+        :param interval: 发包间隔
         """
         # 从交互配置文件里面导入状态信息
 
@@ -280,8 +280,8 @@ class TCPFuzzer:
                     if self.welcome_msg:
                         # 获取欢迎消息
                         data = p.recv(1024)
-                        while self.welcome_msg not in data:
-                            data = p.recv(1024)
+                        if self.welcome_msg not in data:
+                            print "welcome:{}".format(data)
                     else:
                         tran = self.trans[0]['trans']
                         for s in tran:
@@ -341,20 +341,19 @@ class TCPFuzzer:
 
 
 if __name__ == '__main__':
-    fuzzer = TCPFuzzer("192.168.245.131", 21, nomal_trans_conf="../../test/conf/floatftp/", interval=0)
+    fuzzer = TCPFuzzer("192.168.245.131", 21, nomal_trans_conf="/fuzzer/test/conf/floatftp", interval=0)
 
-    fuzzer.fuzz()
+    # fuzzer.fuzz()
 
-    maybe_crash_seqs = [[{"recv": "50617373776f7264207265717569726564", "send": "5553455220667265650D0A"},
-                         {"recv": "6c6f6767656420696e", "send": "5041535320667265650D0A"},
-                         {"recv": "", "send": "808080808080808080808080810d09"}],
-                        [{"recv": "50617373776f7264207265717569726564", "send": "5553455220667265650D0A"},
-                         {"recv": "6c6f6767656420696e", "send": "5041535320667265650D0A"}, {"recv": "",
-                                                                                            "send": "7f7f7f7f7f7f7f7f202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020212020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020297cd9e9749d50e97dc5ee923d5b5fb2f2a483a3330c02556ea0e7fddf695a59334f63fca92db3e2c0c6f48d0f23f4ca58a3c28667fc78cf852c0ae4a20197b497bbfccc7620266b395ec53e35b2e716f5718678f42c9d6980fb721212eea0198fdf7b6a5d14619c03de5d9740b8ae48e49d298914de7b6e18b94ca4ff9f5f65bd78a7617aa52a1d2fd0fbfbf58e2a337a1ec6a922917723d8a09d53f52d31536495621aa8941f44e8a19209ca43e31fccc717febc9d4a8b5f47e51b3b378040c9bd906b8dacc62fa6fe5daa50bf8e0571e1e8807b4230ced64bd8d267f22aac99e7eb36da1175dd3ee99c3c6b104cb98c8e484da3907021e694c9ef4df4930c7f9f6c938338166f21bbb7da81e012b360b79cd3e4e21c44bd0595d23662bd87a275d90a464bd4a6641f2dadb1a5a2aa1b62180ac091893b71b16a8f8b174e3f632730a83a13429309f5ae1016eaa62d1b757287a3aa73bc0288b3b94079f5de7d97c209d4954597e74159cf8d81fbb64d1553523e4be74eb61504f92c8d7d2a89fdec7b7396885163e81ec45bf7be7ffb0939f8cd077604620080d1bd7bbba8b1f5f1b1c19dcf19386ff0ac098c0dbad7126a4ba2038242ab1ecdff94838a4e74b18a14b505640290ecf1197569f9aa82e782c089b0e90699e7363e5a24c0fa739e7e14f228fa7fd24b9ced32b4e8a8fe210c119aed33230de388a5e0d5d9b4377052cb2818cc787c30b62da711db8d4082c9d1dc386629807f9eaf2e3ff45bd495028459e25fb157bf6da51ff6de499fabcfc3fcc7e6a9f77b9a1b2648a3ae8ffa59c2608db54820202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020202020207f7f7f7f7f7f7f7f7f7f7f7f7f7f7f00"}],
-                        [{"recv": "50617373776f7264207265717569726564", "send": "5553455220667265650D0A"},
-                         {"recv": "6c6f6767656420696e", "send": "5041535320667265650D0A"}, {"recv": "",
-                                                                                            "send": "2020202020202021202020202020202020202020202120202020202120202020202000de20200000000000000180202020202020"}]]
-
+    maybe_crash_seqs = [[{"recv": "50617373776f7264207265717569726564",
+                          "send": "15ac53f8e3b610d2fefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefeaa7772fefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefe3f3f3ff40de3b610d24125e45553f8e4b655acf852ff0000"}],
+                        [{"recv": "50617373776f7264207265717569726564", "send": "ce"}], [
+                            {"recv": "50617373776f7264207265717569726564",
+                             "send": "ffffffffff3bffffffffffff77b6e9fffffe00ff12ffffffff202020202020202020202020a4202020ffffffffffffff6bffffffffffffff3bffffffffffff77b6e9fffffe00ff12ffffffff2020202020202020"}],
+                        [{"recv": "50617373776f7264207265717569726564",
+                          "send": "d53fd5a993c4b212024823f411540b585f6060605c6f0b585f60ffffd99185ab"}], [
+                            {"recv": "50617373776f7264207265717569726564",
+                             "send": "2020000000000000007e202000010000000000"}]]
     for seq in maybe_crash_seqs:
         if fuzzer.check_vuln(seq):
             print json.dumps(seq)

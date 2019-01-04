@@ -17,9 +17,9 @@ class UDPFuzzer:
         :param host: 目标的 ip
         :param port: 目标的端口
         :param nomal_trans_conf: 交互序列配置文件，可以是目录，或者文件全路径
+        :param sample_path: 历史漏洞样本目录
         :param logseq_count: 记录最近多少次的样本
-        :param mutate_max_count: 变异的最大次数
-        :param perseq_testcount: 一次循环对每个状态的变异测试
+        :param interval: 发包的间隔时间
         """
         # 从交互配置文件里面导入状态信息
 

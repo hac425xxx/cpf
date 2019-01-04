@@ -14,7 +14,6 @@ from cpf.protocol.usb.MTP import *
 from cpf.protocol.usb.MSC import *
 
 
-
 class CtrlFuzzer:
     def __init__(self, idVendor, idProduct, initq=0, initv=0, initvv=0):
         """
@@ -49,6 +48,9 @@ class CtrlFuzzer:
             except usb.core.USBError as e:
                 if e.backend_error_code != -9 and e.backend_error_code != -1:  # ignore LIBUSB_ERROR_PIPE and LIBUSB_ERROR_IO
                     pass
+            except AttributeError:
+                print "设备获取失败, 请确认设备已经插上"
+                exit(0)
 
             if not self.is_alive():
                 print self.logger.dump_sequence()

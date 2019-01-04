@@ -10,7 +10,11 @@
 import random
 from struct import pack, unpack
 import socket
+import logging
+
+logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
 import scapy.all as scapy
+
 from time import sleep
 import os
 

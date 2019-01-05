@@ -27,10 +27,12 @@ def cli():
 @click.option('--sample', default="", help='历史漏洞样本文件存放路径，用于辅助 fuzzer')
 @click.option('--lognum', type=int, default=5, help='让 fuzzer 记录最近 lognum 次的发送序列，默认为 5')
 @click.option('--interval', type=float, default=0.001, help='设置发包的时间间隔，默认 0.001 秒')
-def tcpfuzzer(host, port, conf, sample, lognum, interval):
+@click.option('--workspace', default="", help='当前fuzz的工作路径，路径下面保存一些运行时的信息')
+def tcpfuzzer(host, port, conf, sample, lognum, interval, workspace):
     """ fuzz tcp服务 """
 
-    fuzzer = TCPFuzzer(host, port, nomal_trans_conf=conf, sample_path=sample, logseq_count=lognum, interval=interval)
+    fuzzer = TCPFuzzer(host, port, nomal_trans_conf=conf, sample_path=sample, logseq_count=lognum, interval=interval,
+                       workspace=workspace)
     fuzzer.fuzz()
 
 
@@ -41,10 +43,12 @@ def tcpfuzzer(host, port, conf, sample, lognum, interval):
 @click.option('--sample', default="", help='历史漏洞样本文件存放路径，用于辅助 fuzzer')
 @click.option('--lognum', type=int, default=5, help='让 fuzzer 记录最近 lognum 次的发送序列，默认为 5')
 @click.option('--interval', type=float, default=0.001, help='设置发包的时间间隔，默认 0.001 秒')
-def udpfuzzer(host, port, conf, sample, lognum, interval):
+@click.option('--workspace', default="", help='当前fuzz的工作路径，路径下面保存一些运行时的信息')
+def udpfuzzer(host, port, conf, sample, lognum, interval, workspace):
     """ fuzz udp服务 """
 
-    fuzzer = UDPFuzzer(host, port, nomal_trans_conf=conf, sample_path=sample, logseq_count=lognum, interval=interval)
+    fuzzer = UDPFuzzer(host, port, nomal_trans_conf=conf, sample_path=sample, logseq_count=lognum, interval=interval,
+                       workspace=workspace)
     fuzzer.fuzz()
 
 
@@ -55,17 +59,20 @@ def udpfuzzer(host, port, conf, sample, lognum, interval):
 @click.option('--sample', default="", help='历史漏洞样本文件存放路径，用于辅助 fuzzer')
 @click.option('--lognum', type=int, default=5, help='让 fuzzer 记录最近 lognum 次的发送序列，默认为 5')
 @click.option('--interval', type=float, default=0.01, help='设置发包的时间间隔，默认 0.01 秒')
-def serialfuzzer(device, baud, conf, sample, lognum, interval):
+@click.option('--workspace', default="", help='当前fuzz的工作路径，路径下面保存一些运行时的信息')
+def serialfuzzer(device, baud, conf, sample, lognum, interval, workspace):
     """ fuzz 基于串口的服务 """
 
     fuzzer = SerialFuzzer(device, baud,
-                          nomal_trans_conf=conf, sample_path=sample, logseq_count=lognum, interval=interval)
+                          nomal_trans_conf=conf, sample_path=sample, logseq_count=lognum, interval=interval,
+                          workspace=workspace)
     fuzzer.fuzz()
 
 
 @cli.command()
 @click.option('--id', required=True, help='USB设备的标识符，格式 vid:pid, 比如 0x18d1:0x4ee2')
-def usbfuzzer(id):
+@click.option('--workspace', default="", help='当前fuzz的工作路径，路径下面保存一些运行时的信息')
+def usbfuzzer(id, workspace):
     """ fuzz usb设备 """
 
     vid = int(id.split(":")[0].strip(), 16)
@@ -73,7 +80,7 @@ def usbfuzzer(id):
 
     # print "{}:{}".format(hex(vid), hex(pid))
 
-    fuzzer = CtrlFuzzer(vid, pid)
+    fuzzer = CtrlFuzzer(vid, pid, workspace=workspace)
     fuzzer.fuzz()
 
 

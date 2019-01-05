@@ -3,6 +3,7 @@
 import sys
 import time
 import random
+import json
 import usb.core
 import binascii
 from scapy.packet import Raw, fuzz
@@ -15,7 +16,7 @@ from cpf.protocol.usb.MSC import *
 
 
 class CtrlFuzzer:
-    def __init__(self, idVendor, idProduct, initq=0, initv=0, initvv=0):
+    def __init__(self, idVendor, idProduct, initq=0, initv=0, initvv=0, workspace=""):
         """
 
         :param idVendor: 设备的 idVendor ， int
@@ -30,10 +31,23 @@ class CtrlFuzzer:
         self.initvv = initvv
         self.mutater = Mutater()
         self.logger = SequenceLogger()
+        self.workspace = workspace
+        self.fuzz_count = 0
 
     def fuzz(self):
 
         while True:
+
+            self.fuzz_count += 1
+
+            if self.fuzz_count % 200:
+                data = {
+                    "fuzz_count": self.fuzz_count,
+                    "is_run": True,
+                }
+                with open(os.path.join(self.workspace, "runtime.json"), "w") as fp:
+                    fp.write(json.dumps(data))
+
             data = self.mutater.mutate("80060100000034343434343434".decode("hex"))
             if len(data) < 7:
                 continue
@@ -53,7 +67,16 @@ class CtrlFuzzer:
                 exit(0)
 
             if not self.is_alive():
-                print self.logger.dump_sequence()
+                seqs = self.logger.dump_sequence()
+
+                data = {
+                    "fuzz_count": self.fuzz_count,
+                    "is_run": False,
+                    "crash_sequence": seqs
+                }
+                with open(os.path.join(self.workspace, "runtime.json"), "w") as fp:
+                    fp.write(json.dumps(data))
+
                 self.device.reset()
                 time.sleep(1)
 
@@ -73,7 +96,7 @@ class CtrlFuzzer:
                     pass
 
             if not self.is_alive():
-                print self.logger.dump_sequence()
+                seqs = self.logger.dump_sequence()
                 self.device.reset()
                 time.sleep(1)
 

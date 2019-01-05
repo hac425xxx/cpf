@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
 import sys
+import shlex
 from time import sleep
 
 reload(sys)
@@ -41,12 +42,15 @@ def execute(cmd, cwd):
 #
 # thread.join()
 
-command = Command("echo 'Process started'; sleep 200; echo 'Process finished'")
-print command.run()
-print command
+# command = Command("echo 'Process started'; sleep 200; echo 'Process finished'")
+# print command.run()
+# print command
+#
+# sleep(5)
+# if command.thread.is_alive():
+#     command.process.terminate()
+#
+# raw_input("wait")
 
-sleep(5)
-if command.thread.is_alive():
-    command.process.terminate()
-
-raw_input("wait")
+out_bytes = subprocess.check_output("ps -ef | grep python", shell=True)
+print "获取命令输出\n{}\n".format(out_bytes)

@@ -18,4 +18,7 @@ def check_pid(pid):
 
 
 if __name__ == "__main__":
-    print check_pid(94133)
+    # print check_pid(94133)
+    task_id = "sssssssssssssssssssss"
+    cmd = "ps -ef | grep python | grep %s | awk  '{print $2}' |xargs  kill -9" % (task_id)
+    print cmd

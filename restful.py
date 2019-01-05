@@ -43,6 +43,10 @@ def teardown_request(exception):
 
 @app.route('/query', methods=['GET'])
 def query():
+    """
+    获取所有数据库里面的信息
+    :return:
+    """
     data = []
     infos = g.db.execute("select * from project_information")
     for i in infos:
@@ -53,7 +57,7 @@ def query():
         info['start_time'] = i[3]
         info['crash_sequence'] = i[4]
         info['cmdline'] = i[5]
-        info['runtime_log'] = i[6]
+        info['workspace'] = i[6]
         # 计算出运行时间，单位为 秒
         info['runtime'] = str(get_delta(int(info['start_time'])))
         data.append(info)
@@ -76,12 +80,19 @@ def status(task_id):
     info['crash_sequence'] = i[4]
     info['cmdline'] = i[5]
     info['workspace'] = i[6]
+    info['status'] = i[7]
     # 计算出运行时间，单位为 秒
     info['runtime'] = str(get_delta(int(info['start_time'])))
     info['runtime_log'] = os.path.join(info['workspace'], "runtime.json")
 
     if info['crash_sequence'] != "":
         info['crash_sequence'] = json.loads(base64.decodestring(info['crash_sequence']))
+        ret = {
+            "result": "successful",
+            "project_info": info,
+            "is_run": False
+        }
+        return jsonify(ret)
 
     # 从 运行日志文件中加载数据
     if os.path.exists(info['runtime_log']):
@@ -89,19 +100,21 @@ def status(task_id):
         with open(info['runtime_log'], "r") as fp:
             runtime_log = json.loads(fp.read())
 
+        # runtime_log['is_run'] = False
         runtime_log['fuzz_time'] = info['runtime']
 
         if info['crash_sequence'] == "" and runtime_log.has_key('crash_sequence'):
             crash_seqs = base64.encodestring(json.dumps(runtime_log['crash_sequence']))
 
-            g.db.execute("UPDATE project_information SET crash_sequence='{}' where task_id='{}'".format(
+            g.db.execute("UPDATE project_information SET crash_sequence='{}',status='dead' where task_id='{}'".format(
                 crash_seqs, info['task_id']))
             g.db.commit()
 
         ret = {
             "result": "successful",
             "runtime": runtime_log,
-            "project_info": info
+            "project_info": info,
+            "is_run": True
         }
     else:
         ret = {
@@ -109,7 +122,6 @@ def status(task_id):
             "msg": u"实时日志文件加载失败",
             "project_info": info
         }
-
     return jsonify(ret)
 
 
@@ -117,10 +129,27 @@ def status(task_id):
 def stop(task_id):
     i = g.db.execute("select * from project_information where task_id='{}'".format(task_id)).fetchone()
     pid = int(i[2])
-    print kill(pid)
+    # print kill(pid)
+
+    workspace = i[6]
+    log = os.path.join(workspace, "runtime.json")
+
+    runtime = {}
+    with open(log, "r") as fp:
+        runtime = json.loads(fp.read())
+
+    runtime['is_run'] = False
+    with open(log, "w") as fp:
+        fp.write(json.dumps(runtime))
+
+    cmd = "ps -ef | grep python | grep %s | awk  '{print $2}' |xargs  kill -9" % (task_id)
+    os.system(cmd)
     ret = {
         "result": "successful"
     }
+
+    g.db.execute("UPDATE project_information SET status='dead' where task_id='{}'".format(task_id))
+    g.db.commit()
     return jsonify(ret)
 
 
@@ -164,7 +193,7 @@ def create():
     # thread = threading.Thread(target=execute, args=(cmdline, workdir))
     # thread.start()
 
-    insert(task_id, project_name, pid, int(time.time()), "", cmdline, workspace)
+    insert(task_id, project_name, pid, int(time.time()), "", cmdline, workspace, "runing")
 
     ret = {
         "result": "successful",
@@ -259,7 +288,7 @@ def init_db():
     conn = connect_db()
     cursor = conn.cursor()
     cursor.execute(
-        'CREATE TABLE IF NOT EXISTS project_information( task_id TEXT PRIMARY KEY, project_name TEXT, pid TEXT, start_time TEXT, crash_sequence TEXT, cmdline TEXT, workspace TEXT)')
+        'CREATE TABLE IF NOT EXISTS project_information( task_id TEXT PRIMARY KEY, project_name TEXT, pid TEXT, start_time TEXT, crash_sequence TEXT, cmdline TEXT, workspace TEXT,status TEXT)')
     cursor.close()
     conn.commit()
 
@@ -287,7 +316,7 @@ def unzip_file(zipfilename, unziptodir):
             outfile.close()
 
 
-def insert(task_id, project_name, pid, start_time, crash_sequence, cmdline, workspace):
+def insert(task_id, project_name, pid, start_time, crash_sequence, cmdline, workspace, status):
     """
     往 project_information 插入一条记录
     :param task_id:
@@ -300,11 +329,11 @@ def insert(task_id, project_name, pid, start_time, crash_sequence, cmdline, work
     :return:
     """
     sql = ''' INSERT INTO project_information 
-(task_id, project_name, pid, start_time, crash_sequence, cmdline, workspace) 
+(task_id, project_name, pid, start_time, crash_sequence, cmdline, workspace, status) 
 VALUES 
-(:task_id, :project_name, :pid, :start_time, :crash_sequence, :cmdline, :workspace)'''
+(:task_id, :project_name, :pid, :start_time, :crash_sequence, :cmdline, :workspace,:status)'''
     g.db.execute(sql, {'task_id': task_id, 'project_name': project_name, 'pid': pid, "start_time": start_time,
-                       "crash_sequence": crash_sequence, "cmdline": cmdline, "workspace": workspace})
+                       "crash_sequence": crash_sequence, "cmdline": cmdline, "workspace": workspace, "status": status})
     g.db.commit()
 
     return True

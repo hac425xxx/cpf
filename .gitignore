@@ -57,4 +57,4 @@ fabric.properties
 
 .idea/vcs.xml
 *.pyc
-*.burp.*
+*.burp*

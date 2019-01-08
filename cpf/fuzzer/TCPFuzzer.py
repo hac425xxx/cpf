@@ -21,56 +21,66 @@ class TCPFuzzer:
         :param logseq_count: 记录最近多少次的样本
         :param interval: 发包间隔
         """
+
+        # 工作目录用于存放运行日志，crash, 后续可能用于记录 log....
+        # 目录不存在就创建一个
+        self.workspace = workspace
+        if self.workspace != "":
+            if not os.path.exists(self.workspace):
+                os.mkdir(self.workspace)
+
         # 从交互配置文件里面导入状态信息
 
         # state_data 是一个数组，每一项代码每个状态下可选数据集合
         self.state_data = []
         # 一个数组，每一项都是一个完整的交互序列
         self.trans = []
+
         #  如果是目录的话，就加载目录下的所有交互文件，然后合并每个状态下的交互过程， 用来后续 fuzz 时做种子
-        if os.path.isdir(nomal_trans_conf):
-            trans_contents = []
-            for fname in os.listdir(nomal_trans_conf):
-                with open(os.path.join(nomal_trans_conf, fname), "r") as fp:
+        if nomal_trans_conf != "":
+            if os.path.isdir(nomal_trans_conf):
+                trans_contents = []
+                for fname in os.listdir(nomal_trans_conf):
+                    with open(os.path.join(nomal_trans_conf, fname), "r") as fp:
+                        content = json.loads(fp.read())
+                        self.welcome_msg = content["welcome_msg"].decode("hex")
+                        tran = {
+                            "file": fname,
+                            "trans": content['trans']
+                        }
+                        # 保存每个完整的交互序列，用于后续 fuzz
+                        self.trans.append(tran)
+                        trans_contents.append(content)
+
+                # 下面是合并个状态的交互过程，用来给 fuzz 做种子
+                for t in trans_contents:
+                    for i, s in enumerate(t['trans']):
+                        if len(self.state_data) > i:
+                            if s not in self.state_data[i]:
+                                self.state_data[i].append(s)
+                        else:
+                            self.state_data.append([s])
+
+            else:
+
+                # 当提供的是一个文件的情况
+                with open(nomal_trans_conf, "r") as fp:
                     content = json.loads(fp.read())
                     self.welcome_msg = content["welcome_msg"].decode("hex")
                     tran = {
-                        "file": fname,
+                        "file": os.path.basename(nomal_trans_conf),
                         "trans": content['trans']
                     }
-                    # 保存每个完整的交互序列，用于后续 fuzz
+
                     self.trans.append(tran)
-                    trans_contents.append(content)
+                    self.state_data = []
 
-            # 下面是合并个状态的交互过程，用来给 fuzz 做种子
-            for t in trans_contents:
-                for i, s in enumerate(t['trans']):
-                    if len(self.state_data) > i:
-                        if s not in self.state_data[i]:
-                            self.state_data[i].append(s)
-                    else:
-                        self.state_data.append([s])
-
-        else:
-
-            # 当提供的是一个文件的情况
-            with open(nomal_trans_conf, "r") as fp:
-                content = json.loads(fp.read())
-                self.welcome_msg = content["welcome_msg"].decode("hex")
-                tran = {
-                    "file": os.path.basename(nomal_trans_conf),
-                    "trans": content['trans']
-                }
-
-                self.trans.append(tran)
-                self.state_data = []
-
-                for i, s in enumerate(content["trans"]):
-                    if len(self.state_data) > i:
-                        if s not in self.state_data[i]:
-                            self.state_data[i].append(s)
-                    else:
-                        self.state_data.append([s])
+                    for i, s in enumerate(content["trans"]):
+                        if len(self.state_data) > i:
+                            if s not in self.state_data[i]:
+                                self.state_data[i].append(s)
+                        else:
+                            self.state_data.append([s])
 
         # print json.dumps(self.state_data)
 
@@ -101,8 +111,8 @@ class TCPFuzzer:
                 # 把路径加到 samples 里面，供后续取用
                 self.samples.append(sample)
 
-        # 初始化测试序列日志队列，保存最近3次的测试序列
-        self.logger = SequenceLogger(maxlen=logseq_count)
+        # 初始化测试序列日志队列，保存最近3次的测试序列, 设置log目录为 workspace/logs
+        self.logger = SequenceLogger(maxlen=logseq_count, logs=os.path.join(self.workspace, "logs"))
 
         self.host = host
         self.port = port
@@ -112,8 +122,6 @@ class TCPFuzzer:
         # 计数器，记录 fuzz 次数
         self.fuzz_count = 0
         self.exception_count = 1
-
-        self.workspace = workspace
 
     def fuzz(self, start_state=0, callback=None, mutate_max_count=25, perseq_testcount=200,
              max_fuzz_count=None):
@@ -206,18 +214,11 @@ class TCPFuzzer:
                         if self.exception_count > 6:
                             print("*" * 20)
                             print("发送数据失败次数已达上限，服务貌似已经挂了， 退出")
-
                             print("*" * 20)
-
                             seqs = self.logger.dump_sequence()
                             print("测试: {} 次, 异常序列: {}".format(self.fuzz_count, json.dumps(seqs)))
-                            data = {
-                                "fuzz_count": self.fuzz_count,
-                                "is_run": False,
-                                "crash_sequence": []
-                            }
-                            with open(os.path.join(self.workspace, "runtime.json"), "w") as fp:
-                                fp.write(json.dumps(data))
+
+                            self.save_crash(seqs, "timeout")
                             raise Exception("服务貌似已经挂了， 退出")
 
                             # if self.check_again(seqs):
@@ -234,17 +235,26 @@ class TCPFuzzer:
                             if self.check_again(seqs):
                                 print("测试: {} 次, 异常序列: {}".format(self.fuzz_count, json.dumps(seqs)))
 
-                                data = {
-                                    "fuzz_count": self.fuzz_count,
-                                    "is_run": False,
-                                    "crash_sequence": seqs
-                                }
-                                with open(os.path.join(self.workspace, "runtime.json"), "w") as fp:
-                                    fp.write(json.dumps(data))
+                                self.save_crash(seqs, "crash")
 
                                 raise Exception("服务貌似已经挂了， 退出")
                         if self.exception_count > 2:
                             self.exception_count -= 2
+
+    def save_crash(self, seqs, type):
+        normal_configure = {
+            "trans": self.trans[0]['trans'],
+            "welcome_msg": self.welcome_msg.encode("hex")
+        }
+        data = {
+            "type": type,
+            "fuzz_count": self.fuzz_count,
+            "is_run": False,
+            "normal_configure": normal_configure,
+            "crash_sequence": seqs
+        }
+        with open(os.path.join(self.workspace, "runtime.json"), "w") as fp:
+            fp.write(json.dumps(data))
 
     def send_to_target(self, test_seqs):
         """

@@ -101,10 +101,10 @@ def status(task_id):
     # 从 运行日志文件中加载数据
     if os.path.exists(info['runtime_log']):
         runtime_log = {}
+        # 加载日志文件中的日志
         with open(info['runtime_log'], "r") as fp:
             runtime_log = json.loads(fp.read())
 
-        # runtime_log['is_run'] = False
         if not runtime_log.has_key('fuzz_time'):
             runtime_log['fuzz_time'] = info['runtime']
 
@@ -119,7 +119,6 @@ def status(task_id):
 
         if runtime_log.has_key('crash_sequence'):
             runtime_log['crash_sequence'] = ""
-
         ret = {
             "result": "successful",
             "runtime": runtime_log,
@@ -247,6 +246,94 @@ def create():
         "result": "successful",
         "task_id": task_id
     }
+    return jsonify(ret)
+
+
+@app.route('/replay', methods=['POST'])
+def replay():
+    """
+    创建一个重放任务
+    :return:
+    """
+    if not request.json:
+        return jsonify({"result": "fail", "msg": u"数据错误"})
+
+    cmdline = ""
+    type = request.json['type']
+    crash_log = request.json['crash_log']
+    crash_seq = crash_log['crash_seq']
+    normal_conf_data = crash_log['normal_configure']
+
+    task_id = str(uuid.uuid1())
+    workdir = os.path.dirname(__file__)
+    workspace = os.path.join("/tmp/replay-{}".format(task_id))
+    os.mkdir(workspace)
+
+    nomal_path = os.path.join(workspace, "normal.json")
+    crash_path = os.path.join(workspace, "crash.json")
+
+    with open(nomal_path, "w") as fp:
+        fp.write(json.dumps(normal_conf_data))
+
+    with open(crash_path, "w") as fp:
+        fp.write(json.dumps(crash_seq))
+
+    if type == "tcp":
+        t1 = request.json['t1']
+        t2 = request.json['t2']
+        speed = request.json['speed']
+        cmdline = "python -u fuzz.py tcpfuzzer --type replay --host {} --port {} --interval {}  --workspace {} --conf {} --crash_path {}".format(
+            t1, t2, speed, workspace, nomal_path, crash_path)
+
+    elif type == "udp":
+        t1 = request.json['t1']
+        t2 = request.json['t2']
+        speed = request.json['speed']
+        cmdline = "python -u fuzz.py udpfuzzer --host {} --port {} --interval {}".format(t1, t2, speed)
+    elif type == "serial":
+        t1 = request.json['t1']
+        t2 = request.json['t2']
+        speed = request.json['speed']
+        cmdline = "python -u fuzz.py serialfuzzer --device {} --baud {} --interval {}".format(t1, t2, speed)
+    else:
+        t1 = request.json['t1']
+        t2 = request.json['t2']
+        id = "{}:{}".format(t1, t2)
+        cmdline = "python -u fuzz.py serialfuzzer --id {}".format(id)
+
+    cmd = Command(cmdline, workdir)
+    THREADS[task_id] = cmd
+    pid = cmd.run()
+
+    ret = {
+        "result": "successful",
+        "task_id": task_id
+    }
+    return jsonify(ret)
+
+
+@app.route('/replay-status/<task_id>/', methods=['GET'])
+def replay_status(task_id):
+    """
+    创建一个重放任务
+    :return:
+    """
+
+    workspace = os.path.join("/tmp/replay-{}".format(task_id))
+
+    result_path = os.path.join(workspace, "result.json")
+    ret = {
+        "result": "failed"
+    }
+    if os.path.exists(result_path):
+        with open(result_path, "r") as fp:
+            data = json.loads(fp.read())
+
+        ret = {
+            "result": "successful",
+            "data": data
+        }
+
     return jsonify(ret)
 
 

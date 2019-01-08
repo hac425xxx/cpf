@@ -76,23 +76,27 @@ def status(task_id):
     info['task_id'] = i[0]
     info['project_name'] = i[1]
     info['pid'] = i[2]
-    info['start_time'] = i[3]
+
+    ts = int(i[3])
+    time_local = time.localtime(ts)
+    dt = time.strftime("%Y-%m-%d %H:%M:%S", time_local)
+    info['start_time'] = dt
     info['crash_sequence'] = i[4]
     info['cmdline'] = i[5]
     info['workspace'] = i[6]
     info['status'] = i[7]
     # 计算出运行时间，单位为 秒
-    info['runtime'] = str(get_delta(int(info['start_time'])))
+    info['runtime'] = str(get_delta(ts))
     info['runtime_log'] = os.path.join(info['workspace'], "runtime.json")
 
     if info['crash_sequence'] != "":
         info['crash_sequence'] = json.loads(base64.decodestring(info['crash_sequence']))
-        ret = {
-            "result": "successful",
-            "project_info": info,
-            "is_run": False
-        }
-        return jsonify(ret)
+        # ret = {
+        #     "result": "successful",
+        #     "project_info": info,
+        #     "is_run": False
+        # }
+        # return jsonify(ret)
 
     # 从 运行日志文件中加载数据
     if os.path.exists(info['runtime_log']):
@@ -101,20 +105,25 @@ def status(task_id):
             runtime_log = json.loads(fp.read())
 
         # runtime_log['is_run'] = False
-        runtime_log['fuzz_time'] = info['runtime']
+        if not runtime_log.has_key('fuzz_time'):
+            runtime_log['fuzz_time'] = info['runtime']
 
         if info['crash_sequence'] == "" and runtime_log.has_key('crash_sequence'):
             crash_seqs = base64.encodestring(json.dumps(runtime_log['crash_sequence']))
+            with open(info['runtime_log'], "w") as fp:
+                fp.write(json.dumps(runtime_log))
 
             g.db.execute("UPDATE project_information SET crash_sequence='{}',status='dead' where task_id='{}'".format(
                 crash_seqs, info['task_id']))
             g.db.commit()
 
+        if runtime_log.has_key('crash_sequence'):
+            runtime_log['crash_sequence'] = ""
+
         ret = {
             "result": "successful",
             "runtime": runtime_log,
-            "project_info": info,
-            "is_run": True
+            "project_info": info
         }
     else:
         ret = {
@@ -125,12 +134,18 @@ def status(task_id):
     return jsonify(ret)
 
 
+@app.route('/connect', methods=['GET'])
+def connect():
+    return jsonify({"status": "ok"})
+
+
 @app.route('/stop/<task_id>/', methods=['GET'])
 def stop(task_id):
     i = g.db.execute("select * from project_information where task_id='{}'".format(task_id)).fetchone()
     pid = int(i[2])
     # print kill(pid)
 
+    ts = int(i[3])
     workspace = i[6]
     log = os.path.join(workspace, "runtime.json")
 
@@ -139,10 +154,11 @@ def stop(task_id):
         runtime = json.loads(fp.read())
 
     runtime['is_run'] = False
+    runtime['fuzz_time'] = str(get_delta(ts))
     with open(log, "w") as fp:
         fp.write(json.dumps(runtime))
 
-    cmd = "ps -ef | grep python | grep %s | awk  '{print $2}' |xargs  kill -9" % (task_id)
+    cmd = "ps -ef | grep python | grep %s | awk  '{print $2}' |xargs  kill -9" % (workspace)
     os.system(cmd)
     ret = {
         "result": "successful"
@@ -171,22 +187,54 @@ def create():
         return jsonify({"result": "fail", "msg": u"数据错误"})
 
     # print request.json
-
+    cmdline = ""
     project_name = request.json['project_name']
-    arguments = request.json['arguments']
     type = request.json['type']
+    workspace = request.json['workspace']
 
     task_id = str(uuid.uuid1())
     workdir = os.path.dirname(__file__)
 
-    dir = "data/{}_{}_{}".format(type, project_name, task_id)
-    workspace = os.path.join(workdir, dir)
-    os.mkdir(workspace)
-
-    cmdline = "python -u fuzz.py {} --workspace {}".format(arguments, workspace)
+    if type == "tcp":
+        t1 = request.json['t1']
+        t2 = request.json['t2']
+        conf_path = os.path.join(workspace, "conf")
+        speed = request.json['speed']
+        cmdline = "python -u fuzz.py tcpfuzzer --host {} --port {} --conf {} --workspace {} --interval {}".format(t1,
+                                                                                                                  t2,
+                                                                                                                  conf_path,
+                                                                                                                  workspace,
+                                                                                                                  speed)
+    elif type == "udp":
+        t1 = request.json['t1']
+        t2 = request.json['t2']
+        conf_path = os.path.join(workspace, "conf")
+        speed = request.json['speed']
+        cmdline = "python -u fuzz.py udpfuzzer --host {} --port {} --conf {} --workspace {} --interval {}".format(t1,
+                                                                                                                  t2,
+                                                                                                                  conf_path,
+                                                                                                                  workspace,
+                                                                                                                  speed)
+    elif type == "serial":
+        t1 = request.json['t1']
+        t2 = request.json['t2']
+        conf_path = os.path.join(workspace, "conf")
+        speed = request.json['speed']
+        cmdline = "python -u fuzz.py serialfuzzer --device {} --baud {} --conf {} --workspace {} --interval {}".format(
+            t1,
+            t2,
+            conf_path,
+            workspace,
+            speed)
+    else:
+        t1 = request.json['t1']
+        t2 = request.json['t2']
+        id = "{}:{}".format(t1, t2)
+        cmdline = "python -u fuzz.py serialfuzzer --id {} --workspace {}".format(
+            id,
+            workspace)
 
     cmd = Command(cmdline, workdir)
-
     THREADS[task_id] = cmd
     pid = cmd.run()
 
@@ -246,10 +294,14 @@ def upload():
     if not os.path.exists(data_dir):
         os.mkdir(data_dir)
 
-    save_path = "{}_{}".format(os.path.join(data_dir.encode("utf-8"), f.filename.split(".")[0]), int(time.time()))
+    save_path = "{}".format(os.path.join(data_dir.encode("utf-8"), f.filename.split(".")[0]))
     unzip_file(tmp_path, save_path)
 
-    return jsonify({"result": "successful"})
+    ret = {
+        "result": "successful",
+        "output_dir": save_path
+    }
+    return jsonify(ret)
 
 
 class Command(object):
@@ -293,27 +345,30 @@ def init_db():
     conn.commit()
 
 
-def unzip_file(zipfilename, unziptodir):
+def unzip_file(zip_file, out_dir):
     """
     解压 zip 文件到目录
-    :param zipfilename:  zip 文件路径
-    :param unziptodir:  解压后的内容存放的路径， 如果目录不存在会新建目录
+    :param zip_file:  zip 文件路径
+    :param out_dir:  解压后的内容存放的路径， 如果目录不存在会新建目录
     :return:
     """
-    if not os.path.exists(unziptodir): os.mkdir(unziptodir, 0777)
-    zfobj = zipfile.ZipFile(zipfilename)
-    for name in zfobj.namelist():
+    if not os.path.exists(out_dir):
+        os.mkdir(out_dir, 0777)
+    zf = zipfile.ZipFile(zip_file)
+    for name in zf.namelist():
         name = name.replace('\\', '/')
+        # 去掉zip压缩的根目录
+        save_name = "/".join(name.split("/")[1:])
 
         if name.endswith('/'):
-            os.mkdir(os.path.join(unziptodir, name))
+            os.mkdir(os.path.join(out_dir, save_name))
         else:
-            ext_filename = os.path.join(unziptodir, name)
-            ext_dir = os.path.dirname(ext_filename)
-            if not os.path.exists(ext_dir): os.mkdir(ext_dir, 0777)
-            outfile = open(ext_filename, 'wb')
-            outfile.write(zfobj.read(name))
-            outfile.close()
+            save_name = os.path.join(out_dir, save_name)
+            save_dir = os.path.dirname(save_name)
+            if not os.path.exists(save_dir):
+                os.mkdir(save_dir, 0777)
+            with open(save_name, 'wb') as fp:
+                fp.write(zf.read(name))
 
 
 def insert(task_id, project_name, pid, start_time, crash_sequence, cmdline, workspace, status):

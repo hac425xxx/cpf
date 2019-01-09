@@ -171,14 +171,6 @@ def stop(task_id):
 @app.route('/create', methods=['POST'])
 def create():
     """
-
-    {
-        "type":"",
-        "project_name":"",
-        "max_run_time":0,
-        "arguments":""
-    }
-
     创建一个任务， 返回 task id
     :return:
     """
@@ -223,6 +215,7 @@ def create():
             conf_path,
             workspace,
             speed)
+
     elif type == "serial":
         t1 = request.json['t1']
         t2 = request.json['t2']
@@ -308,7 +301,8 @@ def replay():
         t1 = request.json['t1']
         t2 = request.json['t2']
         speed = request.json['speed']
-        cmdline = "python -u fuzz.py serialfuzzer --device {} --baud {} --interval {}".format(t1, t2, speed)
+        cmdline = "python -u fuzz.py serialfuzzer --type replay --device {} --baud {} --interval {}  --workspace {} --conf {} --crash_path {}".format(
+            t1, t2, speed, workspace, nomal_path, crash_path)
     else:
         t1 = request.json['t1']
         t2 = request.json['t2']

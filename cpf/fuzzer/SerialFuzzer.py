@@ -101,8 +101,13 @@ class SerialFuzzer:
                 # 把路径加到 samples 里面，供后续取用
                 self.samples.append(sample)
 
+        self.workspace = workspace
+        if self.workspace != "":
+            if not os.path.exists(self.workspace):
+                os.mkdir(self.workspace)
+
         # 初始化测试序列日志队列，保存最近3次的测试序列
-        self.logger = SequenceLogger(maxlen=logseq_count)
+        self.logger = SequenceLogger(maxlen=logseq_count, logs=os.path.join(self.workspace, "logs"))
 
         self.device = device
         self.baud = baud
@@ -112,8 +117,6 @@ class SerialFuzzer:
         # 计数器，记录 fuzz 次数
         self.fuzz_count = 0
         self.exception_count = 1
-
-        self.workspace = workspace
 
     def fuzz(self, start_state=0, callback=None, mutate_max_count=25, perseq_testcount=200,
              max_fuzz_count=None):
@@ -208,13 +211,7 @@ class SerialFuzzer:
                             seqs = self.logger.dump_sequence()
                             print("测试: {} 次, 异常序列: {}".format(self.fuzz_count, json.dumps(seqs)))
 
-                            data = {
-                                "fuzz_count": self.fuzz_count,
-                                "is_run": False,
-                                "crash_sequence": []
-                            }
-                            with open(os.path.join(self.workspace, "runtime.json"), "w") as fp:
-                                fp.write(json.dumps(data))
+                            self.save_crash(seqs, "timeout")
 
                             raise Exception("服务貌似已经挂了， 退出")
 
@@ -232,17 +229,26 @@ class SerialFuzzer:
                             if self.check_again(seqs):
                                 print("测试: {} 次, 异常序列: {}".format(self.fuzz_count, json.dumps(seqs)))
 
-                                data = {
-                                    "fuzz_count": self.fuzz_count,
-                                    "is_run": False,
-                                    "crash_sequence": seqs
-                                }
-                                with open(os.path.join(self.workspace, "runtime.json"), "w") as fp:
-                                    fp.write(json.dumps(data))
+                                self.save_crash(seqs, "crash")
 
                                 raise Exception("服务貌似已经挂了， 退出")
                         if self.exception_count > 2:
                             self.exception_count -= 2
+
+    def save_crash(self, seqs, type):
+        normal_configure = {
+            "trans": self.trans[0]['trans'],
+            "welcome_msg": self.welcome_msg.encode("hex")
+        }
+        data = {
+            "type": type,
+            "fuzz_count": self.fuzz_count,
+            "is_run": False,
+            "normal_configure": normal_configure,
+            "crash_sequence": seqs
+        }
+        with open(os.path.join(self.workspace, "runtime.json"), "w") as fp:
+            fp.write(json.dumps(data))
 
     def send_to_target(self, test_seqs):
         """
@@ -254,12 +260,13 @@ class SerialFuzzer:
         #  发送数据包序列前，把当前要发送序列存入 最大长度为 3 的队列里面， 用于后续记录日志
 
         try:
-            p = Serial(self.device, self.baud)
+            p = Serial(self.device, self.baud, interval=self.interval)
 
             # 如果服务器有欢迎消息，即欢迎消息非空，就先接收欢迎消息
             if self.welcome_msg:
                 # 获取欢迎消息
-                data = p.recv(1024)
+                # data = p.recv(1024)
+                data = p.recv_until(self.welcome_msg)
                 while self.welcome_msg not in data:
                     data = p.recv(1024)
             else:
@@ -268,7 +275,8 @@ class SerialFuzzer:
             # 发送前序数据包序列
             for seq in test_seqs[:-1]:
                 p.send(seq['send'].decode('hex'))
-                data = p.recv(1024)
+                # data = p.recv(1024)
+                data = p.recv_until(seq['recv'].decode('hex'))
                 if seq['recv'].decode('hex') not in data:
                     print("*" * 20)
                     print("与服务器前序交互异常，下面是日志")
@@ -276,7 +284,7 @@ class SerialFuzzer:
                     print("*" * 20)
             # 发送 fuzz 数据包， 即最后一个数据包
             p.send(test_seqs[-1]['send'].decode('hex'))
-            p.recv(1024)
+            p.recv()
 
             del p
             self.fuzz_count += 1
@@ -299,23 +307,24 @@ class SerialFuzzer:
 
         while count < 3:
             try:
-                p = Serial(self.device, self.baud)
+                p = Serial(self.device, self.baud, interval=self.interval)
                 # 如果服务器有欢迎消息，即欢迎消息非空，就先接收欢迎消息
                 if self.welcome_msg:
                     # 获取欢迎消息
-                    data = p.recv(1024)
+                    # data = p.recv(1024)
+                    data = p.recv_until(self.welcome_msg)
                     while self.welcome_msg not in data:
                         data = p.recv(1024)
                 else:
                     tran = self.trans[0]['trans']
                     for s in tran:
                         p.send(s['send'].decode('hex'))
-                        data = p.recv(1024)
-                        if data == "":
-                            raise Exception("time out")
+                        # data = p.recv(1024)
+                        data = p.recv_until(s['recv'].decode("hex"))
 
                         if s['recv'] not in data.encode('hex'):
                             print("except: {}, actal recv: {}".format(s['recv'], data.encode('hex')))
+                            raise Exception("recv error")
                 del p
                 return True
             except Exception as e:

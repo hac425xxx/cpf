@@ -73,12 +73,42 @@ def tcpfuzzer(host, port, conf, sample, lognum, interval, workspace, type, crash
 @click.option('--lognum', type=int, default=5, help='让 fuzzer 记录最近 lognum 次的发送序列，默认为 5')
 @click.option('--interval', type=float, default=0.001, help='设置发包的时间间隔，默认 0.001 秒')
 @click.option('--workspace', default="", help='当前fuzz的工作路径，路径下面保存一些运行时的信息')
-def udpfuzzer(host, port, conf, sample, lognum, interval, workspace):
+@click.option('--type', default="fuzz", help='运行模式,fuzz 或者 replay')
+@click.option('--crash_path', default="fuzz", help='存放异常序列的文件路径')
+def udpfuzzer(host, port, conf, sample, lognum, interval, workspace, type, crash_path):
     """ fuzz udp服务 """
 
-    fuzzer = UDPFuzzer(host, port, nomal_trans_conf=conf, sample_path=sample, logseq_count=lognum, interval=interval,
-                       workspace=workspace)
-    fuzzer.fuzz()
+    if type == "fuzz":
+        fuzzer = UDPFuzzer(host, port, nomal_trans_conf=conf, sample_path=sample, logseq_count=lognum,
+                           interval=interval,
+                           workspace=workspace)
+        fuzzer.fuzz()
+    else:
+        try:
+            fuzzer = UDPFuzzer(host, port, nomal_trans_conf=conf, sample_path=sample, logseq_count=lognum,
+                               interval=interval,
+                               workspace=workspace)
+            seqs = []
+            with open(crash_path, "r") as fp:
+                seqs = json.loads(fp.read())
+            for seq in seqs:
+                if fuzzer.check_vuln(seq):
+                    ret = {
+                        "crash": True,
+                        "seq": seq
+                    }
+                    with open(os.path.join(workspace, "result.json"), "w") as fp:
+                        fp.write(json.dumps(ret))
+
+                    exit(0)
+        except Exception as e:
+            pass
+
+        ret = {
+            "crash": False,
+        }
+        with open(os.path.join(workspace, "result.json"), "w") as fp:
+            fp.write(json.dumps(ret))
 
 
 @cli.command()

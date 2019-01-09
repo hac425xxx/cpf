@@ -21,6 +21,10 @@
           <mappings>
             <mapping deploy="/fuzzer" local="$PROJECT_DIR$" />
           </mappings>
+          <excludedPaths>
+            <excludedPath local="true" path="$PROJECT_DIR$/test/fuzzer_restful.burp" />
+            <excludedPath local="true" path="$PROJECT_DIR$/test/fuzzer_restful.burp.backup" />
+          </excludedPaths>
         </serverdata>
       </paths>
     </serverData>

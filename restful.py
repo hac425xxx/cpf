@@ -194,26 +194,35 @@ def create():
     task_id = str(uuid.uuid1())
     workdir = os.path.dirname(__file__)
 
+    # 是否提供 样本库
+    has_sample = False
+    sample_path = os.path.join(workspace, "sample")  # sample/ 下面存放历史漏洞样本库
+    if not os.path.exists(sample_path) or is_empty(sample_path):
+        sample_path = ""
+
     if type == "tcp":
         t1 = request.json['t1']
         t2 = request.json['t2']
         conf_path = os.path.join(workspace, "conf")
         speed = request.json['speed']
-        cmdline = "python -u fuzz.py tcpfuzzer --host {} --port {} --conf {} --workspace {} --interval {}".format(t1,
-                                                                                                                  t2,
-                                                                                                                  conf_path,
-                                                                                                                  workspace,
-                                                                                                                  speed)
+        cmdline = "python -u fuzz.py tcpfuzzer --host {} --port {} --conf {} --workspace {} --interval {}".format(
+            t1,
+            t2,
+            conf_path,
+            workspace,
+            speed)
+
     elif type == "udp":
         t1 = request.json['t1']
         t2 = request.json['t2']
         conf_path = os.path.join(workspace, "conf")
         speed = request.json['speed']
-        cmdline = "python -u fuzz.py udpfuzzer --host {} --port {} --conf {} --workspace {} --interval {}".format(t1,
-                                                                                                                  t2,
-                                                                                                                  conf_path,
-                                                                                                                  workspace,
-                                                                                                                  speed)
+        cmdline = "python -u fuzz.py udpfuzzer --host {} --port {} --conf {} --workspace {} --interval {}".format(
+            t1,
+            t2,
+            conf_path,
+            workspace,
+            speed)
     elif type == "serial":
         t1 = request.json['t1']
         t2 = request.json['t2']
@@ -232,6 +241,9 @@ def create():
         cmdline = "python -u fuzz.py serialfuzzer --id {} --workspace {}".format(
             id,
             workspace)
+
+    if sample_path != "" and type != "usb":
+        cmdline += " --sample {}".format(sample_path)
 
     cmd = Command(cmdline, workdir)
     THREADS[task_id] = cmd
@@ -289,7 +301,9 @@ def replay():
         t1 = request.json['t1']
         t2 = request.json['t2']
         speed = request.json['speed']
-        cmdline = "python -u fuzz.py udpfuzzer --host {} --port {} --interval {}".format(t1, t2, speed)
+        cmdline = "python -u fuzz.py udpfuzzer --type replay --host {} --port {} --interval {}  --workspace {} --conf {} --crash_path {}".format(
+            t1, t2, speed, workspace, nomal_path, crash_path)
+
     elif type == "serial":
         t1 = request.json['t1']
         t2 = request.json['t2']
@@ -304,10 +318,22 @@ def replay():
     cmd = Command(cmdline, workdir)
     THREADS[task_id] = cmd
     pid = cmd.run()
-
     ret = {
         "result": "successful",
         "task_id": task_id
+    }
+
+    return jsonify(ret)
+
+
+@app.route('/replay-stop/<task_id>/', methods=['GET'])
+def replay_stop(task_id):
+    workspace = os.path.join("/tmp/replay-{}".format(task_id))
+
+    cmd = "ps -ef | grep python | grep %s | awk  '{print $2}' |xargs  kill -9" % (workspace)
+    os.system(cmd)
+    ret = {
+        "result": "successful"
     }
     return jsonify(ret)
 
@@ -332,6 +358,12 @@ def replay_status(task_id):
         ret = {
             "result": "successful",
             "data": data
+        }
+        return jsonify(ret)
+
+    if not is_process_alive(task_id):
+        ret = {
+            "result": "dead"
         }
 
     return jsonify(ret)
@@ -423,6 +455,13 @@ def get_data_dir():
     return os.path.abspath(path)
 
 
+def is_empty(dir):
+    if os.path.isdir(dir) and len(os.listdir(dir)) == 0:
+        return True
+
+    return False
+
+
 def init_db():
     conn = connect_db()
     cursor = conn.cursor()
@@ -500,6 +539,14 @@ def check_pid(pid):
         return False
     else:
         return True
+
+
+def is_process_alive(taskid):
+    res = subprocess.check_output("ps -ef | grep python | grep {}".format(taskid), shell=True)
+
+    if res.count(taskid) > 1:
+        return True
+    return False
 
 
 def kill(pid):

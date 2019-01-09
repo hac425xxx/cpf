@@ -101,8 +101,13 @@ class UDPFuzzer:
                 # 把路径加到 samples 里面，供后续取用
                 self.samples.append(sample)
 
+        self.workspace = workspace
+        if self.workspace != "":
+            if not os.path.exists(self.workspace):
+                os.mkdir(self.workspace)
+
         # 初始化测试序列日志队列，保存最近3次的测试序列
-        self.logger = SequenceLogger(maxlen=logseq_count)
+        self.logger = SequenceLogger(maxlen=logseq_count, logs=os.path.join(self.workspace, "logs"))
 
         self.host = host
         self.port = port
@@ -112,8 +117,6 @@ class UDPFuzzer:
         # 计数器，记录 fuzz 次数
         self.fuzz_count = 0
         self.exception_count = 1
-
-        self.workspace = workspace
 
     def fuzz(self, start_state=0, callback=None, mutate_max_count=25, perseq_testcount=200,
              max_fuzz_count=None):
@@ -208,13 +211,7 @@ class UDPFuzzer:
                             seqs = self.logger.dump_sequence()
                             print("测试: {} 次, 异常序列: {}".format(self.fuzz_count, json.dumps(seqs)))
 
-                            data = {
-                                "fuzz_count": self.fuzz_count,
-                                "is_run": False,
-                                "crash_sequence": []
-                            }
-                            with open(os.path.join(self.workspace, "runtime.json"), "w") as fp:
-                                fp.write(json.dumps(data))
+                            self.save_crash(seqs, "timeout")
 
                             raise Exception("服务貌似已经挂了， 退出")
 
@@ -232,17 +229,25 @@ class UDPFuzzer:
                             if self.check_again(seqs):
                                 print("测试: {} 次, 异常序列: {}".format(self.fuzz_count, json.dumps(seqs)))
 
-                                data = {
-                                    "fuzz_count": self.fuzz_count,
-                                    "is_run": False,
-                                    "crash_sequence": seqs
-                                }
-                                with open(os.path.join(self.workspace, "runtime.json"), "w") as fp:
-                                    fp.write(json.dumps(data))
-
+                                self.save_crash(seqs, "crash")
                                 raise Exception("服务貌似已经挂了， 退出")
                         if self.exception_count > 2:
                             self.exception_count -= 2
+
+    def save_crash(self, seqs, type):
+        normal_configure = {
+            "trans": self.trans[0]['trans'],
+            "welcome_msg": self.welcome_msg.encode("hex")
+        }
+        data = {
+            "type": type,
+            "fuzz_count": self.fuzz_count,
+            "is_run": False,
+            "normal_configure": normal_configure,
+            "crash_sequence": seqs
+        }
+        with open(os.path.join(self.workspace, "runtime.json"), "w") as fp:
+            fp.write(json.dumps(data))
 
     def send_to_target(self, test_seqs):
         """

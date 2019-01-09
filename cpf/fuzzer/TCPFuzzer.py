@@ -381,6 +381,11 @@ if __name__ == '__main__':
 
     # fuzzer.fuzz()
 
+    print fuzzer.check_vuln([{"recv": "50617373776f7264207265717569726564", "send": "5553455220667265650D0A"},
+                             {"recv": "6c6f6767656420696e", "send": "5041535320667265650D0A"}, {"recv": "",
+                                                                                                "send": "4c41414141cd401715de0160606060f1797458392e3a2b302dde9bf22b6771caadf80631780fd0b6a8557e1d3539ffffffffffffffffb6904edb30dec2b27386f15291ab4b73201f55073bc5c937a1eda42bf1fb0737702df15291ab4b73201f55073bc511eab2391d28f6e86d9ea79f9ac4179cdf2e4b51958c1acf58effefefefefefefefefefefefefefefefefefefefefefefefefefefefefea42bf1fb0737702df15291ab4b73201f55073bc511eab2391d28f6e86d9ea79f9ac4179cdf2e4b51958c1acf58effefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefe14a5459d41411bdeb85c25e9e55a0d"}])
+    exit(0)
+
     maybe_crash_seqs = [[{"recv": "50617373776f7264207265717569726564",
                           "send": "15ac53f8e3b610d2fefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefeaa7772fefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefe3f3f3ff40de3b610d24125e45553f8e4b655acf852ff0000"}],
                         [{"recv": "50617373776f7264207265717569726564", "send": "ce"}], [

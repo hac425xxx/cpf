@@ -160,16 +160,41 @@ def serialfuzzer(device, baud, conf, sample, lognum, interval, workspace, type, 
 @cli.command()
 @click.option('--id', required=True, help='USB设备的标识符，格式 vid:pid, 比如 0x18d1:0x4ee2')
 @click.option('--workspace', default="", help='当前fuzz的工作路径，路径下面保存一些运行时的信息')
-def usbfuzzer(id, workspace):
+@click.option('--type', default="fuzz", help='运行模式,fuzz 或者 replay')
+@click.option('--crash_path', default="fuzz", help='存放异常序列的文件路径')
+def usbfuzzer(id, workspace, type, crash_path):
     """ fuzz usb设备 """
 
     vid = int(id.split(":")[0].strip(), 16)
     pid = int(id.split(":")[1].strip(), 16)
 
-    # print "{}:{}".format(hex(vid), hex(pid))
+    if type == "fuzz":
+        fuzzer = CtrlFuzzer(vid, pid, workspace=workspace)
+        fuzzer.fuzz()
+    else:
+        try:
+            fuzzer = CtrlFuzzer(vid, pid, workspace=workspace)
+            seqs = []
+            with open(crash_path, "r") as fp:
+                seqs = json.loads(fp.read())
+            for seq in seqs:
+                if fuzzer.check_vuln(seq):
+                    ret = {
+                        "crash": True,
+                        "seq": seq
+                    }
+                    with open(os.path.join(workspace, "result.json"), "w") as fp:
+                        fp.write(json.dumps(ret))
 
-    fuzzer = CtrlFuzzer(vid, pid, workspace=workspace)
-    fuzzer.fuzz()
+                    exit(0)
+        except Exception as e:
+            print e
+
+        ret = {
+            "crash": False,
+        }
+        with open(os.path.join(workspace, "result.json"), "w") as fp:
+            fp.write(json.dumps(ret))
 
 
 if __name__ == '__main__':

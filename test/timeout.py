@@ -28,14 +28,21 @@ def set_timeout(num, callback):
 
 
 if __name__ == '__main__':
-    def after_timeout():  # 超时后的处理函数
-        print "执行超时"
+    # def after_timeout():  # 超时后的处理函数
+    #     print "执行超时"
+    #
+    #
+    # @set_timeout(2, after_timeout)  # 限时 2 秒
+    # def connect():  # 要执行的函数
+    #     time.sleep(3)  # 函数执行时间，写大于2的值，可测试超时
+    #     return '正常执行'
+    #
+    #
+    # connect()
+    d = 0
+    if d == 1:
+        res = "sssss"
+    else:
+        res = 2
 
-
-    @set_timeout(2, after_timeout)  # 限时 2 秒
-    def connect():  # 要执行的函数
-        time.sleep(3)  # 函数执行时间，写大于2的值，可测试超时
-        return '正常执行'
-
-
-    connect()
+    print res

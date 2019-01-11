@@ -13,10 +13,11 @@ from cpf.protocol.usb.CCID import *
 from cpf.protocol.usb.QCDM import *
 from cpf.protocol.usb.MTP import *
 from cpf.protocol.usb.MSC import *
+from time import sleep
 
 
 class CtrlFuzzer:
-    def __init__(self, idVendor, idProduct, initq=0, initv=0, initvv=0, workspace=""):
+    def __init__(self, idVendor, idProduct, workspace=""):
         """
 
         :param idVendor: 设备的 idVendor ， int
@@ -26,9 +27,6 @@ class CtrlFuzzer:
         :param initvv:
         """
         self.device = usb.core.find(idVendor=idVendor, idProduct=idProduct)
-        self.initq = initq
-        self.initv = initv
-        self.initvv = initvv
         self.mutater = Mutater()
         self.fuzz_count = 0
 
@@ -45,8 +43,6 @@ class CtrlFuzzer:
 
         while True:
 
-            self.fuzz_count += 1
-
             if self.fuzz_count % 200 == 0:
                 print "已经测试: {} 次".format(self.fuzz_count)
                 data = {
@@ -59,6 +55,7 @@ class CtrlFuzzer:
             data = self.mutater.mutate("80060100000034343434343434".decode("hex"))
             if len(data) < 7:
                 continue
+
             bRequest = int(data[1].encode("hex"), 16)
             wValue = int(data[2:4].encode("hex"), 16)
             wIndex = int(data[4:6].encode("hex"), 16)
@@ -67,6 +64,7 @@ class CtrlFuzzer:
             try:
                 self.logger.add_to_queue(data.encode("hex"))
                 res = self.device.ctrl_transfer(bmRequestType, bRequest, wValue, wIndex, data[6:], timeout=250)
+                self.fuzz_count += 1
             except usb.core.USBError as e:
                 if e.backend_error_code != -9 and e.backend_error_code != -1:  # ignore LIBUSB_ERROR_PIPE and LIBUSB_ERROR_IO
                     pass
@@ -85,51 +83,62 @@ class CtrlFuzzer:
                 with open(os.path.join(self.workspace, "runtime.json"), "w") as fp:
                     fp.write(json.dumps(data))
 
-                self.device.reset()
-                time.sleep(1)
+                print "设备已经挂了"
+                print "crash用例： {}".format(json.dumps(seqs))
 
-    def check(self, packets=[]):
-        for data in packets:
-            data = data.decode('hex')
-            bmRequestType = int(data[0].encode("hex"), 16)
-            bRequest = int(data[1].encode("hex"), 16)
-            wValue = int(data[2:4].encode("hex"), 16)
-            wIndex = int(data[4:6].encode("hex"), 16)
+                self.save_crash(seqs)
 
-            try:
-                self.logger.add_to_queue(data.encode("hex"))
-                res = self.device.ctrl_transfer(bmRequestType, bRequest, wValue, wIndex, data[6:], timeout=250)
-            except usb.core.USBError as e:
-                if e.backend_error_code != -9 and e.backend_error_code != -1:  # ignore LIBUSB_ERROR_PIPE and LIBUSB_ERROR_IO
-                    pass
+                return True
 
-            if not self.is_alive():
-                seqs = self.logger.dump_sequence()
-                self.device.reset()
-                time.sleep(1)
+                # self.device.reset()
+                # time.sleep(1)
+
+    def check_vuln(self, data):
+        data = data.decode('hex')
+        bmRequestType = int(data[0].encode("hex"), 16)
+        bRequest = int(data[1].encode("hex"), 16)
+        wValue = int(data[2:4].encode("hex"), 16)
+        wIndex = int(data[4:6].encode("hex"), 16)
+
+        try:
+            self.logger.add_to_queue(data.encode("hex"))
+            res = self.device.ctrl_transfer(bmRequestType, bRequest, wValue, wIndex, data[6:], timeout=250)
+        except usb.core.USBError as e:
+            pass
+
+        if not self.is_alive():
+            print "造成异常的用例：{}".format(data.encode('hex'))
+            return True
+        else:
+            return False
 
     def is_alive(self):
         res = ""
-        try:
-            res = self.device.ctrl_transfer(0x80, 0, 0, 0, 2)
-        except usb.core.USBError as e:
 
-            if e.backend_error_code == -4:  # LIBUSB_ERROR_NO_DEVICE
-                # print "\nDevice not found!"
-                return False
+        count = 0
 
-            if e.backend_error_code == -3:  # LIBUSB_ERROR_ACCESS
-                # print "\nAccess denied to device!"
-                return False
+        while count < 3:
 
-            # print "\nGET_STATUS returned error %i" % e.backend_error_code
-            return False
+            try:
+                self.device.reset()
+                return True
+            except Exception as e:
+                print e
+                count += 1
+                sleep(0.5)
 
-        if len(res) != 2:
-            # print "\nGET_STATUS returned %u bytes: %s" % (len(res), binascii.hexlify(res))
-            return False
+        return False
 
-        return True
+    def save_crash(self, seqs):
+
+        data = {
+            "usb_fuzz_type": "CtrlFuzzer",
+            "fuzz_count": self.fuzz_count,
+            "is_run": False,
+            "crash_sequence": seqs
+        }
+        with open(os.path.join(self.workspace, "runtime.json"), "w") as fp:
+            fp.write(json.dumps(data))
 
 
 class CCIDFuzzer:
@@ -340,9 +349,11 @@ class USBDeviceFuzzer:
 
 
 if __name__ == '__main__':
-    # 0781:5591
+    # 0781:5591 ， 闪迪
+    # 0951:1666 , 金士顿
 
-    fuzzer = CtrlFuzzer(0x0951, 0x1666)
+    # fuzzer = CtrlFuzzer(0x0951, 0x1666)
+    fuzzer = CtrlFuzzer(0x0781, 0x5591)
 
     #  18d1:4ee2
     # fuzzer = MTPFuzzer(0x0951, 0x1666)
@@ -350,7 +361,11 @@ if __name__ == '__main__':
     # fuzzer.check([u'06013a000000343400344b34343434', u'8006c0810000343434343434c200e9260134',
     #               u'80060100000034343434343434000034'])
 
-    fuzzer.fuzz()
+    # fuzzer.fuzz()
+
+    print fuzzer.check_vuln(
+        "0603000000343434f6800601000000343434f64992e64234343434f6800601000000343434f64992e64234")
+
     #
     # for i in range(10):
     #     data = str(fuzz(APDU(CLA=0x80)))

@@ -277,18 +277,23 @@ def replay():
     type = request.json['type']
     crash_log = request.json['crash_log']
     crash_seq = crash_log['crash_seq']
-    normal_conf_data = crash_log['normal_configure']
 
     task_id = str(uuid.uuid1())
     workdir = os.path.dirname(__file__)
     workspace = os.path.join("/tmp/replay-{}".format(task_id))
     os.mkdir(workspace)
 
-    nomal_path = os.path.join(workspace, "normal.json")
+    # 存放 crash 序列的文件路径
     crash_path = os.path.join(workspace, "crash.json")
+    # 存放正常交互序列的文件
+    nomal_path = os.path.join(workspace, "normal.json")
 
-    with open(nomal_path, "w") as fp:
-        fp.write(json.dumps(normal_conf_data))
+    if (crash_log.has_key("usb_fuzz_type")):
+        usb_fuzz_type = crash_log['usb_fuzz_type']
+    else:
+        normal_conf_data = crash_log['normal_configure']
+        with open(nomal_path, "w") as fp:
+            fp.write(json.dumps(normal_conf_data))
 
     with open(crash_path, "w") as fp:
         fp.write(json.dumps(crash_seq))
@@ -317,7 +322,9 @@ def replay():
         t1 = request.json['t1']
         t2 = request.json['t2']
         id = "{}:{}".format(t1, t2)
-        cmdline = "python -u fuzz.py serialfuzzer --id {}".format(id)
+        cmdline = "python -u fuzz.py usbfuzzer --type replay --id {}  --workspace {} --crash_path {}".format(id,
+                                                                                                             workspace,
+                                                                                                             crash_path)
 
     cmd = Command(cmdline, workdir)
     THREADS[task_id] = cmd

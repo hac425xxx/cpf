@@ -30,9 +30,16 @@ class CtrlFuzzer:
         self.initv = initv
         self.initvv = initvv
         self.mutater = Mutater()
-        self.logger = SequenceLogger()
-        self.workspace = workspace
         self.fuzz_count = 0
+
+        self.workspace = workspace
+        # 工作目录用于存放运行日志，crash, 后续可能用于记录 log....
+        # 目录不存在就创建一个
+        self.workspace = workspace
+        if self.workspace != "":
+            if not os.path.exists(self.workspace):
+                os.mkdir(self.workspace)
+        self.logger = SequenceLogger(logs=os.path.join(self.workspace, "logs"))
 
     def fuzz(self):
 
@@ -40,7 +47,8 @@ class CtrlFuzzer:
 
             self.fuzz_count += 1
 
-            if self.fuzz_count % 200:
+            if self.fuzz_count % 200 == 0:
+                print "已经测试: {} 次".format(self.fuzz_count)
                 data = {
                     "fuzz_count": self.fuzz_count,
                     "is_run": True,
@@ -51,10 +59,10 @@ class CtrlFuzzer:
             data = self.mutater.mutate("80060100000034343434343434".decode("hex"))
             if len(data) < 7:
                 continue
-            bmRequestType = int(data[0].encode("hex"), 16)
             bRequest = int(data[1].encode("hex"), 16)
             wValue = int(data[2:4].encode("hex"), 16)
             wIndex = int(data[4:6].encode("hex"), 16)
+            bmRequestType = int(data[0].encode("hex"), 16)
 
             try:
                 self.logger.add_to_queue(data.encode("hex"))
@@ -107,18 +115,18 @@ class CtrlFuzzer:
         except usb.core.USBError as e:
 
             if e.backend_error_code == -4:  # LIBUSB_ERROR_NO_DEVICE
-                print "\nDevice not found!"
-                sys.exit()
+                # print "\nDevice not found!"
+                return False
 
             if e.backend_error_code == -3:  # LIBUSB_ERROR_ACCESS
-                print "\nAccess denied to device!"
-                sys.exit()
+                # print "\nAccess denied to device!"
+                return False
 
-            print "\nGET_STATUS returned error %i" % e.backend_error_code
+            # print "\nGET_STATUS returned error %i" % e.backend_error_code
             return False
 
         if len(res) != 2:
-            print "\nGET_STATUS returned %u bytes: %s" % (len(res), binascii.hexlify(res))
+            # print "\nGET_STATUS returned %u bytes: %s" % (len(res), binascii.hexlify(res))
             return False
 
         return True
@@ -334,10 +342,10 @@ class USBDeviceFuzzer:
 if __name__ == '__main__':
     # 0781:5591
 
-    # fuzzer = CtrlFuzzer(0x0781, 0x5591)
+    fuzzer = CtrlFuzzer(0x0951, 0x1666)
 
     #  18d1:4ee2
-    fuzzer = MTPFuzzer(0x18d1, 0x4ee2)
+    # fuzzer = MTPFuzzer(0x0951, 0x1666)
 
     # fuzzer.check([u'06013a000000343400344b34343434', u'8006c0810000343434343434c200e9260134',
     #               u'80060100000034343434343434000034'])

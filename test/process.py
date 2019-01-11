@@ -5,20 +5,20 @@ import sys
 reload(sys)
 sys.setdefaultencoding('utf8')
 
-import os
+import subprocess
 
 
 def check_pid(pid):
+    pid = str(pid)
     try:
-        os.kill(pid, 0)
-    except OSError:
+        res = subprocess.check_output("ps -fp {}".format(pid), shell=True)
+        if pid in res:
+            return True
+        else:
+            return False
+    except:
         return False
-    else:
-        return True
 
 
 if __name__ == "__main__":
-    # print check_pid(94133)
-    task_id = "sssssssssssssssssssss"
-    cmd = "ps -ef | grep python | grep %s | awk  '{print $2}' |xargs  kill -9" % (task_id)
-    print cmd
+    print check_pid(12703)

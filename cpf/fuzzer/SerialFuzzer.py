@@ -174,7 +174,7 @@ class SerialFuzzer:
 
                     sample = {}
                     # 根据随机， 看是否用漏洞库里的样本做种子
-                    if self.samples and random.randint(0, 2) > 1:
+                    if self.samples and random.randint(0, 20) < 3:
                         sample = random.choice(self.samples)
                         path = sample['path']
                         sample['hit'] += 1

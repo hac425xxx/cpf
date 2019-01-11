@@ -128,8 +128,12 @@ def status(task_id):
         ret = {
             "result": "fail",
             "msg": u"实时日志文件加载失败",
-            "project_info": info
+            "project_info": info,
+            "status": "alive"
         }
+        if not check_pid(info['pid']):
+            ret['status'] = "dead"
+
     return jsonify(ret)
 
 
@@ -147,6 +151,12 @@ def stop(task_id):
     ts = int(i[3])
     workspace = i[6]
     log = os.path.join(workspace, "runtime.json")
+
+    if not os.path.exists(log):
+        ret = {
+            "result": "fail"
+        }
+        return jsonify(ret)
 
     runtime = {}
     with open(log, "r") as fp:
@@ -231,7 +241,7 @@ def create():
         t1 = request.json['t1']
         t2 = request.json['t2']
         id = "{}:{}".format(t1, t2)
-        cmdline = "python -u fuzz.py serialfuzzer --id {} --workspace {}".format(
+        cmdline = "python -u fuzz.py usbfuzzer --id {} --workspace {}".format(
             id,
             workspace)
 
@@ -527,12 +537,15 @@ def get_delta(ts):
 
 
 def check_pid(pid):
+    pid = str(pid)
     try:
-        os.kill(pid, 0)
-    except OSError:
+        res = subprocess.check_output("ps -fp {}".format(pid), shell=True)
+        if pid in res:
+            return True
+        else:
+            return False
+    except:
         return False
-    else:
-        return True
 
 
 def is_process_alive(taskid):

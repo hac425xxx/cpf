@@ -219,6 +219,8 @@ class TCPFuzzer:
                             print("测试: {} 次, 异常序列: {}".format(self.fuzz_count, json.dumps(seqs)))
 
                             self.save_crash(seqs, "timeout")
+
+                            self.logger.exit_thread()
                             raise Exception("服务貌似已经挂了， 退出")
 
                             # if self.check_again(seqs):
@@ -237,6 +239,7 @@ class TCPFuzzer:
 
                                 self.save_crash(seqs, "crash")
 
+                                self.logger.exit_thread()
                                 raise Exception("服务貌似已经挂了， 退出")
                         if self.exception_count > 2:
                             self.exception_count -= 2

@@ -55,6 +55,7 @@ def tcpfuzzer(host, port, conf, sample, lognum, interval, workspace, type, crash
                     with open(os.path.join(workspace, "result.json"), "w") as fp:
                         fp.write(json.dumps(ret))
 
+                    fuzzer.logger.exit_thread()
                     exit(0)
         except Exception as e:
             pass
@@ -63,6 +64,8 @@ def tcpfuzzer(host, port, conf, sample, lognum, interval, workspace, type, crash
         }
         with open(os.path.join(workspace, "result.json"), "w") as fp:
             fp.write(json.dumps(ret))
+
+        fuzzer.logger.exit_thread()
 
 
 @cli.command()
@@ -100,6 +103,7 @@ def udpfuzzer(host, port, conf, sample, lognum, interval, workspace, type, crash
                     with open(os.path.join(workspace, "result.json"), "w") as fp:
                         fp.write(json.dumps(ret))
 
+                    fuzzer.logger.exit_thread()
                     exit(0)
         except Exception as e:
             pass
@@ -109,6 +113,8 @@ def udpfuzzer(host, port, conf, sample, lognum, interval, workspace, type, crash
         }
         with open(os.path.join(workspace, "result.json"), "w") as fp:
             fp.write(json.dumps(ret))
+
+        fuzzer.logger.exit_thread()
 
 
 @cli.command()
@@ -146,6 +152,7 @@ def serialfuzzer(device, baud, conf, sample, lognum, interval, workspace, type, 
                     with open(os.path.join(workspace, "result.json"), "w") as fp:
                         fp.write(json.dumps(ret))
 
+                    fuzzer.logger.exit_thread()
                     exit(0)
         except Exception as e:
             pass
@@ -156,21 +163,34 @@ def serialfuzzer(device, baud, conf, sample, lognum, interval, workspace, type, 
         with open(os.path.join(workspace, "result.json"), "w") as fp:
             fp.write(json.dumps(ret))
 
+        fuzzer.logger.exit_thread()
 
 @cli.command()
 @click.option('--id', required=True, help='USB设备的标识符，格式 vid:pid, 比如 0x18d1:0x4ee2')
+@click.option('--conf', default="", help='正常交互序列配置文件的路径， 如果是目录的话就加载目录下的所有文件')
+@click.option('--sample', default="", help='历史漏洞样本文件存放路径，用于辅助 fuzzer')
+@click.option('--lognum', type=int, default=5, help='让 fuzzer 记录最近 lognum 次的发送序列，默认为 5')
+@click.option('--interval', type=float, default=0.01, help='设置发包的时间间隔，默认 0.01 秒')
 @click.option('--workspace', default="", help='当前fuzz的工作路径，路径下面保存一些运行时的信息')
 @click.option('--type', default="fuzz", help='运行模式,fuzz 或者 replay')
 @click.option('--crash_path', default="fuzz", help='存放异常序列的文件路径')
-def usbfuzzer(id, workspace, type, crash_path):
+@click.option('--usb_fuzz_type', default="ctrl", help='存放异常序列的文件路径')
+def usbfuzzer(id, conf, sample, lognum, interval, workspace, type, crash_path, usb_fuzz_type):
     """ fuzz usb设备 """
 
     vid = int(id.split(":")[0].strip(), 16)
     pid = int(id.split(":")[1].strip(), 16)
 
     if type == "fuzz":
-        fuzzer = CtrlFuzzer(vid, pid, workspace=workspace)
-        fuzzer.fuzz()
+        if usb_fuzz_type == "ctrl":
+            fuzzer = CtrlFuzzer(vid, pid, workspace=workspace)
+            fuzzer.fuzz()
+        elif usb_fuzz_type == "bulk":
+            fuzzer = BulkFuzzer(vid=vid, pid=pid, nomal_trans_conf=conf, sample_path=sample, logseq_count=lognum,
+                                interval=interval,
+                                workspace=workspace)
+
+            fuzzer.fuzz()
     else:
         try:
             fuzzer = CtrlFuzzer(vid, pid, workspace=workspace)
@@ -186,6 +206,7 @@ def usbfuzzer(id, workspace, type, crash_path):
                     with open(os.path.join(workspace, "result.json"), "w") as fp:
                         fp.write(json.dumps(ret))
 
+                    fuzzer.logger.exit_thread()
                     exit(0)
         except Exception as e:
             print e
@@ -193,8 +214,10 @@ def usbfuzzer(id, workspace, type, crash_path):
         ret = {
             "crash": False,
         }
+
         with open(os.path.join(workspace, "result.json"), "w") as fp:
             fp.write(json.dumps(ret))
+        fuzzer.logger.exit_thread()
 
 
 if __name__ == '__main__':

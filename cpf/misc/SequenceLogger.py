@@ -15,6 +15,9 @@ def save_log(base):
     count = 1
     while True:
         seqs = LOG_QUEUE.get()
+        if seqs == "exit-thread":
+            return True
+
         path = os.path.join(base, "{}.json".format(count))
         count += 1
         with open(path, "w") as fp:
@@ -29,7 +32,8 @@ class SequenceLogger:
         :param maxlen:  最多保存的序列个数
         :param log_dir:    日志保存位置
         """
-        self.log_queue = []
+        self.log_list = []
+        self.log_queue = deque(maxlen=maxlen)
 
         if log_dir == "":
             # 默认日志保存在 fuzz.py 目录下
@@ -52,9 +56,10 @@ class SequenceLogger:
         :return:
         """
 
+        self.log_list.append(json.dumps(seqs))
         self.log_queue.append(json.dumps(seqs))
 
-        if len(self.log_queue) > 100:
+        if len(self.log_list) > 100:
             self.put_seqs_to_thread()
 
     def dump_sequence(self):
@@ -68,7 +73,6 @@ class SequenceLogger:
                 break
 
         #  seqs 的第一项应该是触发异常的用例
-        # print json.dumps(seqs)
         with open(os.path.join(self.log_dir, self.get_log_filename()), "w") as fp:
             fp.write(json.dumps(seqs))
         return seqs
@@ -84,11 +88,14 @@ class SequenceLogger:
         while True:
             try:
                 # 把日志队列里面的序列取出保存
-                seqs.append(json.loads(self.log_queue.pop()))
+                seqs.append(json.loads(self.log_list.pop()))
             except:
                 break
 
         LOG_QUEUE.put(json.dumps(seqs))
+
+    def exit_thread(self):
+        LOG_QUEUE.put("exit-thread")
 
 
 if __name__ == '__main__':

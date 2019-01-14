@@ -563,8 +563,10 @@ class BulkFuzzer:
                             print("测试: {} 次, 异常序列: {}".format(self.fuzz_count, json.dumps(seqs)))
 
                             self.save_crash(seqs, "timeout")
+                            self.logger.exit_thread()
 
-                            raise Exception("服务貌似已经挂了， 退出")
+                            print "服务貌似已经挂了， 退出"
+                            exit(0)
 
                             # if self.check_again(seqs):
                             #     print("测试: {} 次, 异常序列: {}".format(self.fuzz_count, json.dumps(seqs)))
@@ -582,7 +584,9 @@ class BulkFuzzer:
 
                                 self.save_crash(seqs, "crash")
 
-                                raise Exception("服务貌似已经挂了， 退出")
+                                self.logger.exit_thread()
+                                print "服务貌似已经挂了， 退出"
+                                exit(0)
                         if self.exception_count > 2:
                             self.exception_count -= 2
 
@@ -653,11 +657,15 @@ class BulkFuzzer:
 
     def is_alive(self):
         """
+
         判断目标是否存活
         :return: 如果存活返回 True, 否则返回 False
         """
+        try:
+            self.reset()
+        except:
+            return False
 
-        self.reset()
         if not self.dev.is_alive():
             return False
 
@@ -723,7 +731,7 @@ class BulkFuzzer:
         """
         通过重放序列来重现漏洞
         :param seqs: 一个完成的交互数据包序列
-        :return: 如果漏洞存在返回 True
+        :return: 如果验证成功 返回 True
         """
         if self.send_to_target(seqs):
             print("发包成功，下面测试服务是否存活")
@@ -758,7 +766,7 @@ if __name__ == '__main__':
     #     fuzzer.check_vuln(d)
 
     fuzzer = BulkFuzzer(vid=0x0781, pid=0x5591,
-                        nomal_trans_conf="../../test/conf/sandisk.json")
+                        nomal_trans_conf="/fuzzer/test/conf/sandisk/conf/sandisk.json")
     fuzzer.fuzz()
 
     #

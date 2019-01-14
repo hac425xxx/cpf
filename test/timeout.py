@@ -39,10 +39,11 @@ if __name__ == '__main__':
     #
     #
     # connect()
-    d = 0
-    if d == 1:
-        res = "sssss"
-    else:
-        res = 2
 
-    print res
+    t1 = time.time()
+
+    time.sleep(2)
+
+    t2 = time.time()
+
+    print t2 - t1

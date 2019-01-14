@@ -232,9 +232,9 @@ class QCDMDevice(BulkPipe):
 
     def receive_response(self):
 
-        data = self.receive()
+        data = self.recv()
         while len(data) > 0 and data[-1] != "\x7e":
-            d = self.receive()
+            d = self.recv()
             if len(d) == 0:
                 break
             data += d

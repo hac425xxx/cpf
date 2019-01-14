@@ -110,18 +110,15 @@ class BOMSDevice(BulkPipe):
         self.boms_reset()
         BulkPipe.reset(self)
 
-    def read_reply(self, length=None):
-
-        # receive data until first CSW
+    def read_reply(self, length=1024):
         data = ""
         try:
             res = "."
             while len(res) > 0:
                 if len(res) > 12 and res[-13:-9] == "USBS":
                     break
-                res = self.receive(length)
+                res = self.recv(length)
                 data += res
-                # print "read %u bytes: %s" % (len(res), self.hex_dump(res))
         except USBException as e:
             print "%s in read_reply(), resetting!" % e
             self.boms_reset()
@@ -186,8 +183,23 @@ class BOMSDevice(BulkPipe):
         try:
             self.send(MSCCBW(ReqTag=self.next_tag()) / Read10())
             reply = self.read_reply()
+            print "***" * 15
+            hexdump(reply)
+            print "***" * 15
         except USBException as e:
-            print "%s in BOMSC.is_alive()!" % e
             return False
 
         return self.check_status(reply)
+
+
+if __name__ == '__main__':
+    from cpf.misc.utils import *
+
+    bp = BOMSDevice("0x0781", "0x5591")
+    bp.reset()
+
+    # 5553424301000000f2f58fd780000b95ae3ebdf5d2cd4937844e0000000000
+    cmd = "5553424301000000c0f58fd780000b95ae3ebdf5af023a8b844d0000000000".decode("hex")
+    bp.send(cmd)
+
+    hexdump(bp.recv_until("555342".decode("hex"), timeout=3))

@@ -16,7 +16,7 @@ while dev.is_alive():
     cmd = CCID(bSeq=dev.next_seq(), bSlot=0) / PC_to_RDR_XfrBlock() / fuzz(APDU(CLA=0x80))
 
     dev.send(str(cmd))
-    res = dev.receive()
+    res = dev.recv()
 
     if (len(res)):
         reply = CCID(res)

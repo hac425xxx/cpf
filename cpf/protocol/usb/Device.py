@@ -1,10 +1,12 @@
-#!/usr/bin/env python
+#!/usr/bin/python
+# -*- coding: UTF-8 -*-
 
 import usb.core
 import usb.util
 import usb.control
 import sys
 import time
+from time import sleep
 
 from Exceptions import *
 
@@ -32,7 +34,7 @@ class USBDevice:
 
         self._device = usb.core.find(idVendor=self._vid, idProduct=self._pid)
         if self._device == None:
-            raise USBException("Error opening device 0x%x:0x%x!" % (self._vid, self._pid))
+            raise USBException("设备 {}:{} 不存在".format(vid, pid))
 
         try:
             self._device.set_configuration()
@@ -79,19 +81,6 @@ class USBDevice:
         try:
             res = usb.control.get_status(self._device)
         except usb.core.USBError as e:
-            if e.backend_error_code == -7:  # LIBUSB_ERROR_TIMEOUT
-                raise USBException('Device not responding!')
-
-            elif (e.backend_error_code == -4):  # LIBUSB_ERROR_NO_DEVICE
-                raise USBException('Device disconnected!')
-
-            elif (e.backend_error_code == -3):  # LIBUSB_ERROR_ACCESS
-                raise USBException('Device couldn\'t be accessed!')
-
-            else:
-                raise e
-
-        if res < 0 or res > 2:
             return False
 
         return True
@@ -102,7 +91,7 @@ class BulkPipe(USBDevice):
     A simple interface to a USB Device bulk transfer pipe.
     '''
 
-    def __init__(self, vid, pid, iface=0, timeout=500):
+    def __init__(self, vid, pid, iface=0, timeout=500, interval=0.01):
         '''
         @type    vid: string
         @param    vid: Vendor ID of device in hex
@@ -116,6 +105,7 @@ class BulkPipe(USBDevice):
 
         USBDevice.__init__(self, vid, pid, timeout)
         self._iface = int(iface)
+        self.interval = interval
 
         self._epin = None
         self._epout = None
@@ -123,10 +113,11 @@ class BulkPipe(USBDevice):
         # find bulk endpoints
         for c in self._device:
             for i in c:
-                # print("Interface: 0x%x 0x%x/0x%x/0x%x " % (i.bInterfaceNumber, i.bInterfaceClass, i.bInterfaceSubClass, i.bInterfaceProtocol))
+                print("Interface: 0x%x 0x%x/0x%x/0x%x " % (
+                    i.bInterfaceNumber, i.bInterfaceClass, i.bInterfaceSubClass, i.bInterfaceProtocol))
                 if i.bInterfaceNumber == self._iface:
                     for ep in i:
-                        # print("Endpoint: 0x%x 0x%x " % (ep.bEndpointAddress, ep.bmAttributes))
+                        print("Endpoint: 0x%x 0x%x " % (ep.bEndpointAddress, ep.bmAttributes))
                         if ep.bmAttributes == usb.ENDPOINT_TYPE_BULK:
                             if ep.bEndpointAddress & usb.ENDPOINT_DIR_MASK == usb.ENDPOINT_IN:
                                 self._epin = ep
@@ -157,67 +148,94 @@ class BulkPipe(USBDevice):
         retry = 2
         while retry > 0:
             try:
+                sleep(self.interval)
                 self._epout.write(str(data), timeout=self._timeout)
-                retry = 0
-                # print("Data OUT, %u bytes: " % (len(data)))
-                # print '>>>>>>>>>>>>>>>>>>>>>>>>>>'
-                # print self.hex_dump(data)
+                break
             except usb.core.USBError as e:
-                # print("Data OUT error: %i" % e.backend_error_code)
                 retry -= 1
                 if e.backend_error_code == -9:  # LIBUSB_ERROR_PIPE
-                    if retry == 0:
-                        if usb.control.get_status(self._device, self._epout) & 1 == 1:
-                            raise USBStalled("EP 0x%0.2x stalled" % self._epout.bEndpointAddress)
-                        raise USBException("USB Pipe Error when writing on EP 0x%0.2x" % self._epout.bEndpointAddress)
                     self.clear_stall(self._epout)
-                    time.sleep(0.001)
+                    sleep(0.1)
+                sleep(0.001)
 
-                elif e.backend_error_code == -7:
-                    raise USBTimeout("USB timeout when writing on EP 0x%0.2x" % self._epout.bEndpointAddress)
-                else:
-                    raise e
-
-    def receive(self, size=None):
-
-        if size is None:
-            size = 0x1000
-
-        retry = 5
+    def recv(self, size=1024):
+        data = ""
+        retry = 3
         while retry > 0:
             try:
                 data = self._epin.read(size, timeout=self._timeout)
-                retry = 0
+                break
             except usb.core.USBError as e:
-                # print("Data IN error: %i" % e.backend_error_code)
+                # print "端点读取异常: {}, {}".format(e, e.backend_error_code)
                 retry -= 1
                 if e.backend_error_code == -9:  # LIBUSB_ERROR_PIPE
-                    if retry == 0:
-                        if usb.control.get_status(self._device, self._epin) & 1 == 1:
-                            raise USBStalled("EP 0x%0.2x stalled" % self._epin.bEndpointAddress)
-                        raise USBException("USB Pipe Error when reading on EP 0x%0.2x" % self._epin.bEndpointAddress)
                     self.clear_stall(self._epin)
-                    time.sleep(0.001)
+                    sleep(0.01)
 
-                elif e.backend_error_code == -7:
-                    # raise USBTimeout("USB timeout when reading on EP 0x%0.2x" % self._epin.bEndpointAddress)
-                    return ""
-                else:
-                    raise e
-
-        if len(data) == 0:
-            raise USBException("receive() returned no data!")
+                sleep(0.001)
         string = ''.join(chr(byte) for byte in data)
-        # print("Data IN, %u bytes: " % (len(data)))
-        # print '<<<<<<<<<<<<<<<<<<<<<<<<<<'
-        # print self.hex_dump(string)
-
         return string
+
+    def recv_until(self, need, timeout=1):
+        """
+        读取到 need 返回所有读取的内容， 否则返回超时前读取的所有内容
+        :param need: 需要的字符串
+        :param timeout: 超时时间
+        :return: 读取的内容
+        """
+        start = time.time()
+        data = ""
+        while need not in data:
+            sleep(0.01)
+            delta = time.time() - start
+            if delta > timeout:
+                return data
+            data += self.recv(1024)
+        return data
+
+    def ep_init(self):
+        """
+        初始化 设备的 in, out 端点，保证后续可以正常读写
+        :return:
+        """
+        try:
+            # issue Bulk-Only Mass Storage Reset
+            bmRequestType = usb.util.build_request_type(
+                usb.util.CTRL_OUT,
+                usb.util.CTRL_TYPE_CLASS,
+                usb.util.CTRL_RECIPIENT_INTERFACE)
+
+            self._device.ctrl_transfer(
+                bmRequestType=bmRequestType,
+                bRequest=0x0ff,
+                wIndex=self._iface)
+
+            # clear STALL condition
+            self.clear_stall(self._epin)
+            self.clear_stall(self._epout)
+
+        except usb.core.USBError as e:
+            print "%s in boms_reset()!" % e
 
 
 if __name__ == '__main__':
-    bt = BulkPipe("0781", "5591")
+    from cpf.misc.utils import *
 
-    while True:
-        bt.send("s" * 8)
-        print bt.receive(8)
+    bp = BulkPipe("0x0781", "0x5591")
+    bp.reset()
+    bp.ep_init()
+
+    cmd = "5553424301000000c0f58fd780000b95ae3ebdf5af023a8b844d0000000000".decode("hex")
+    bp.send(cmd)
+
+    hexdump(bp.recv_until("555342".decode("hex"), timeout=3))
+
+    # hexdump(bp.recv(1024))
+    # hexdump(bp.recv(1024))
+
+    # while True:
+    #     try:
+    #         print bt.receive(8)
+    #         sleep(1)
+    #     except:
+    #         pass

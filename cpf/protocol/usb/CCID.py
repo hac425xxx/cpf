@@ -285,7 +285,7 @@ class CCIDDevice(BulkPipe):
             return False
 
         self.send(str(CCID(bSeq=self.next_seq()) / PC_to_RDR_XfrBlock() / APDU()))
-        data = self.receive(100)
+        data = self.recv(100)
 
         if len(data) < 1:
             print "Device not responding!"

@@ -112,7 +112,7 @@ class TCPFuzzer:
                 self.samples.append(sample)
 
         # 初始化测试序列日志队列，保存最近3次的测试序列, 设置log目录为 workspace/logs
-        self.logger = SequenceLogger(maxlen=logseq_count, logs=os.path.join(self.workspace, "logs"))
+        self.logger = SequenceLogger(maxlen=logseq_count, log_dir=os.path.join(self.workspace, "logs"))
 
         self.host = host
         self.port = port

@@ -5,6 +5,7 @@ import usb.core
 import usb.util
 
 import usb.backend.libusb1
+from time import sleep
 
 # find our device
 dev = usb.core.find(idVendor=0x0781, idProduct=0x5591)
@@ -20,12 +21,20 @@ try:
 except:
     pass
 
-# ep_in = itf[0]
-# ep_out = itf[1]
+ep_in = dev[0][0, 0][0]
+ep_out = dev[0][0, 0][1]
 #
 # # ep_out.write("40f1f200f3000000".decode("hex"))
 #
-# print ep_in.read(8)
+
+
+while True:
+    try:
+        print ep_in.read(8)
+    except:
+        pass
+
+    sleep(0.5)
 
 # 发送原始的 控制报文
 # dev.ctrl_transfer(0x40, 0xbb, 0xccdd, 0xeeff, "ssssssss")

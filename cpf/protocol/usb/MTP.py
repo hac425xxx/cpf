@@ -196,7 +196,7 @@ class MTPDevice(BulkPipe):
         response = []
         while 1:
             try:
-                data = self.receive()
+                data = self.recv()
                 # print "read %u bytes: %s" % (len(data), self.hex_dump(data))
             except USBException as e:
                 print "%s in read_response(), resetting!" % e

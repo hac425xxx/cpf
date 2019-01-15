@@ -88,6 +88,7 @@ class CtrlFuzzer:
                 print "crash用例： {}".format(json.dumps(seqs))
 
                 self.save_crash(seqs)
+                self.logger.exit_thread()
 
                 return True
 
@@ -133,7 +134,7 @@ class CtrlFuzzer:
     def save_crash(self, seqs):
 
         data = {
-            "usb_fuzz_type": "CtrlFuzzer",
+            "usb_fuzz_type": "ctrl",
             "fuzz_count": self.fuzz_count,
             "is_run": False,
             "crash_sequence": seqs
@@ -597,6 +598,7 @@ class BulkFuzzer:
         }
         data = {
             "type": type,
+            "usb_fuzz_type": "bulk",
             "fuzz_count": self.fuzz_count,
             "is_run": False,
             "normal_configure": normal_configure,

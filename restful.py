@@ -241,12 +241,27 @@ def create():
         t1 = request.json['t1']
         t2 = request.json['t2']
         id = "{}:{}".format(t1, t2)
-        cmdline = "python -u fuzz.py usbfuzzer --id {} --workspace {}".format(
-            id,
-            workspace)
 
-    if sample_path != "" and type != "usb":
-        cmdline += " --sample {}".format(sample_path)
+        usb_fuzz_type = request.json['usb_fuzz_type']
+
+        if usb_fuzz_type == "ctrl":
+            cmdline = "python -u fuzz.py usbfuzzer --id {} --workspace {}".format(
+                id,
+                workspace)
+        elif usb_fuzz_type == "bulk":
+            conf_path = os.path.join(workspace, "conf")
+            speed = request.json['speed']
+            cmdline = "python -u fuzz.py usbfuzzer --type fuzz --usb_fuzz_type bulk  --id {} --conf {} --workspace {} --interval {}".format(
+                id,
+                conf_path,
+                workspace,
+                speed)
+
+    if sample_path != "":
+        if type == "usb" and usb_fuzz_type == "ctrl":
+            pass
+        else:
+            cmdline += " --sample {}".format(sample_path)
 
     cmd = Command(cmdline, workdir)
     THREADS[task_id] = cmd
@@ -322,9 +337,20 @@ def replay():
         t1 = request.json['t1']
         t2 = request.json['t2']
         id = "{}:{}".format(t1, t2)
-        cmdline = "python -u fuzz.py usbfuzzer --type replay --id {}  --workspace {} --crash_path {}".format(id,
-                                                                                                             workspace,
-                                                                                                             crash_path)
+
+        usb_fuzz_type = request.json['usb_fuzz_type']
+
+        if usb_fuzz_type == "ctrl":
+            cmdline = "python -u fuzz.py usbfuzzer --type replay --id {}  --workspace {} --crash_path {}".format(id,
+                                                                                                                 workspace,
+                                                                                                                 crash_path)
+        elif usb_fuzz_type == "bulk":
+            speed = request.json['speed']
+            cmdline = "python -u fuzz.py usbfuzzer --type replay --usb_fuzz_type bulk  --id {} --conf {} --workspace {} --interval {} --crash_path {}".format(
+                id,
+                nomal_path,
+                workspace,
+                speed, crash_path)
 
     cmd = Command(cmdline, workdir)
     THREADS[task_id] = cmd

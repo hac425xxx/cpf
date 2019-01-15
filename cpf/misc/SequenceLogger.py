@@ -32,6 +32,8 @@ class SequenceLogger:
         :param maxlen:  最多保存的序列个数
         :param log_dir:    日志保存位置
         """
+
+        # 存放日志的队列，list, 里面存的都是 json 数据
         self.log_list = []
         self.log_queue = deque(maxlen=maxlen)
 
@@ -45,6 +47,7 @@ class SequenceLogger:
         if not os.path.exists(self.log_dir):
             os.mkdir(self.log_dir)
 
+        # 开一个线程，用于保存日志到文件
         self.save_thread = Thread(target=save_log, args=(self.log_dir,))
         self.save_thread.start()
 
@@ -95,6 +98,15 @@ class SequenceLogger:
         LOG_QUEUE.put(json.dumps(seqs))
 
     def exit_thread(self):
+        """
+        往 队列里面 放入 exit-thread ，让线程退出
+        :return:
+        """
+
+        # 首先把 log_list 里面的数据存放到文件
+        self.put_seqs_to_thread()
+
+        # 通知线程退出
         LOG_QUEUE.put("exit-thread")
 
 

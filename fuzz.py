@@ -165,6 +165,7 @@ def serialfuzzer(device, baud, conf, sample, lognum, interval, workspace, type, 
 
         fuzzer.logger.exit_thread()
 
+
 @cli.command()
 @click.option('--id', required=True, help='USB设备的标识符，格式 vid:pid, 比如 0x18d1:0x4ee2')
 @click.option('--conf', default="", help='正常交互序列配置文件的路径， 如果是目录的话就加载目录下的所有文件')
@@ -193,7 +194,13 @@ def usbfuzzer(id, conf, sample, lognum, interval, workspace, type, crash_path, u
             fuzzer.fuzz()
     else:
         try:
-            fuzzer = CtrlFuzzer(vid, pid, workspace=workspace)
+            if usb_fuzz_type == "ctrl":
+                fuzzer = CtrlFuzzer(vid, pid, workspace=workspace)
+            elif usb_fuzz_type == "bulk":
+                fuzzer = BulkFuzzer(vid=vid, pid=pid, nomal_trans_conf=conf, sample_path=sample, logseq_count=lognum,
+                                    interval=interval,
+                                    workspace=workspace)
+
             seqs = []
             with open(crash_path, "r") as fp:
                 seqs = json.loads(fp.read())
@@ -217,6 +224,8 @@ def usbfuzzer(id, conf, sample, lognum, interval, workspace, type, crash_path, u
 
         with open(os.path.join(workspace, "result.json"), "w") as fp:
             fp.write(json.dumps(ret))
+
+        # 退出线程
         fuzzer.logger.exit_thread()
 
 
@@ -227,4 +236,6 @@ if __name__ == '__main__':
 测试 ftp
 fuzz.py tcpfuzzer --host 192.168.245.131 --port 21 --conf /fuzzer/test/conf/floatftp --interval 0
 
+测试 bulk fuzzer
+fuzz.py usbfuzzer --type fuzz --usb_fuzz_type bulk  --id 0x0781:0x5591 --workspace /tmp/sandisk --conf /fuzzer/test/conf/sandisk/conf/sandisk.json
 """

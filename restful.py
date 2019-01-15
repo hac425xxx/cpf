@@ -6,7 +6,7 @@ reload(sys)
 sys.setdefaultencoding('utf8')
 
 import sqlite3
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask import g
 import zipfile
 import subprocess
@@ -460,6 +460,16 @@ def upload():
     return jsonify(ret)
 
 
+@app.route('/download/<task_id>/', methods=['GET'])
+def download(task_id):
+    i = g.db.execute("select * from project_information where task_id='{}'".format(task_id)).fetchone()
+    workspace = i[6]
+    zip_file_name = "/tmp/{}-workspace.zip".format(task_id)
+    zip_dir(workspace, zip_file_name)
+    # sleep(10)
+    return send_from_directory(os.path.dirname(zip_file_name), os.path.basename(zip_file_name), as_attachment=True)
+
+
 class Command(object):
     def __init__(self, cmd, workdir):
         self.cmd = cmd
@@ -506,6 +516,29 @@ def init_db():
         'CREATE TABLE IF NOT EXISTS project_information( task_id TEXT PRIMARY KEY, project_name TEXT, pid TEXT, start_time TEXT, crash_sequence TEXT, cmdline TEXT, workspace TEXT,status TEXT)')
     cursor.close()
     conn.commit()
+
+
+def zip_dir(dirname, zipfilename):
+    """
+    压缩目录
+    :param dirname:
+    :param zipfilename:
+    :return:
+    """
+    filelist = []
+    if os.path.isfile(dirname):
+        filelist.append(dirname)
+    else:
+        for root, dirs, files in os.walk(dirname):
+            for name in files:
+                filelist.append(os.path.join(root, name))
+
+    zf = zipfile.ZipFile(zipfilename, "w", zipfile.zlib.DEFLATED)
+    for tar in filelist:
+        arcname = tar[len(dirname):]
+        # print arcname
+        zf.write(tar, arcname)
+    zf.close()
 
 
 def unzip_file(zip_file, out_dir):

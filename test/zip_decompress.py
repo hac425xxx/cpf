@@ -56,5 +56,5 @@ def unzip_file(zipfilename, unziptodir):
 
 
 if __name__ == '__main__':
-    zip_dir(r'/fuzzer/cpf', r'/fuzzer/cpf.zip')
-    unzip_file(r'/fuzzer/cpf.zip', r'/tmp/cpffff')
+    zip_dir(r'/fuzzer/data', r'/tmp/cpf.zip')
+    # unzip_file(r'/fuzzer/cpf.zip', r'/tmp/cpffff')

@@ -7,6 +7,7 @@
 @time: 2018/11/1 21:45
 @desc:
 """
+import uuid
 
 
 def process():
@@ -18,8 +19,7 @@ if __name__ == '__main__':
     import imp
 
     # p1 = importlib.import_module("/fuzzer/test/plugins/p1.py")
-    p1 = imp.load_source("", "/fuzzer/test/plugins/p1.py")
-    func = p1.process
-
-    func()
-
+    m = imp.load_source(str(uuid.uuid1()), "/fuzzer/test/plugins/p1.py")
+    func_name = getattr(m, "CALLBACK_FUNCTION")
+    func = getattr(m, func_name)
+    print func("ssssssssss")

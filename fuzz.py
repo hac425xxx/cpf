@@ -6,6 +6,8 @@ reload(sys)
 sys.setdefaultencoding('utf8')
 
 import click
+import imp
+import uuid
 from cpf.fuzzer.TCPFuzzer import TCPFuzzer
 from cpf.fuzzer.UDPFuzzer import UDPFuzzer
 from cpf.fuzzer.SerialFuzzer import SerialFuzzer
@@ -30,14 +32,32 @@ def cli():
 @click.option('--workspace', default="", help='当前fuzz的工作路径，路径下面保存一些运行时的信息')
 @click.option('--type', default="fuzz", help='运行模式,fuzz 或者 replay')
 @click.option('--crash_path', default="fuzz", help='存放异常序列的文件路径')
-def tcpfuzzer(host, port, conf, sample, lognum, interval, workspace, type, crash_path):
+@click.option('--callback_file', default="", help='存放 callback 函数实现的 py 文件，用于对变异数据进行修正，比如计算校验和')
+def tcpfuzzer(host, port, conf, sample, lognum, interval, workspace, type, crash_path, callback_file):
     """ fuzz tcp服务 """
 
     if type == "fuzz":
         fuzzer = TCPFuzzer(host, port, nomal_trans_conf=conf, sample_path=sample, logseq_count=lognum,
                            interval=interval,
                            workspace=workspace)
-        fuzzer.fuzz()
+
+        callback = None
+        try:
+
+            # 如果 没有提供 callback_file 参数，尝试从 workspace/callback.py 提取 callback 函数
+            if callback_file == "" and os.path.exists(os.path.join(workspace, "callback.py")):
+                callback_file = os.path.join(workspace, "callback.py")
+
+            if callback_file != "" and os.path.exists(callback_file):
+                m = imp.load_source(str(uuid.uuid1()), callback_file)
+                # 根据模块的 CALLBACK_FUNCTION 来找到 callback 的函数名
+                func_name = getattr(m, "CALLBACK_FUNCTION")
+                # 取出函数对象
+                callback = getattr(m, func_name)
+        except Exception as e:
+            print "获取 callback 失败，异常为 {}".format(e)
+
+        fuzzer.fuzz(callback=callback)
     else:
         try:
             fuzzer = TCPFuzzer(host, port, nomal_trans_conf=conf, sample_path=sample, logseq_count=lognum,
@@ -78,14 +98,33 @@ def tcpfuzzer(host, port, conf, sample, lognum, interval, workspace, type, crash
 @click.option('--workspace', default="", help='当前fuzz的工作路径，路径下面保存一些运行时的信息')
 @click.option('--type', default="fuzz", help='运行模式,fuzz 或者 replay')
 @click.option('--crash_path', default="fuzz", help='存放异常序列的文件路径')
-def udpfuzzer(host, port, conf, sample, lognum, interval, workspace, type, crash_path):
+@click.option('--callback_file', default="", help='存放 callback 函数实现的 py 文件，用于对变异数据进行修正，比如计算校验和')
+def udpfuzzer(host, port, conf, sample, lognum, interval, workspace, type, crash_path, callback_file):
     """ fuzz udp服务 """
 
     if type == "fuzz":
         fuzzer = UDPFuzzer(host, port, nomal_trans_conf=conf, sample_path=sample, logseq_count=lognum,
                            interval=interval,
                            workspace=workspace)
-        fuzzer.fuzz()
+
+        callback = None
+        try:
+
+            # 如果 没有提供 callback_file 参数，尝试从 workspace/callback.py 提取 callback 函数
+            if callback_file == "" and os.path.exists(os.path.join(workspace, "callback.py")):
+                callback_file = os.path.join(workspace, "callback.py")
+
+            if callback_file != "" and os.path.exists(callback_file):
+                m = imp.load_source(str(uuid.uuid1()), callback_file)
+                # 根据模块的 CALLBACK_FUNCTION 来找到 callback 的函数名
+                func_name = getattr(m, "CALLBACK_FUNCTION")
+                # 取出函数对象
+                callback = getattr(m, func_name)
+        except Exception as e:
+            print "获取 callback 失败，异常为 {}".format(e)
+
+        fuzzer.fuzz(callback=callback)
+
     else:
         try:
             fuzzer = UDPFuzzer(host, port, nomal_trans_conf=conf, sample_path=sample, logseq_count=lognum,
@@ -127,14 +166,32 @@ def udpfuzzer(host, port, conf, sample, lognum, interval, workspace, type, crash
 @click.option('--workspace', default="", help='当前fuzz的工作路径，路径下面保存一些运行时的信息')
 @click.option('--type', default="fuzz", help='运行模式,fuzz 或者 replay')
 @click.option('--crash_path', default="fuzz", help='存放异常序列的文件路径')
-def serialfuzzer(device, baud, conf, sample, lognum, interval, workspace, type, crash_path):
+@click.option('--callback_file', default="", help='存放 callback 函数实现的 py 文件，用于对变异数据进行修正，比如计算校验和')
+def serialfuzzer(device, baud, conf, sample, lognum, interval, workspace, type, crash_path, callback_file):
     """ fuzz 基于串口的服务 """
 
     if type == "fuzz":
         fuzzer = SerialFuzzer(device, baud,
                               nomal_trans_conf=conf, sample_path=sample, logseq_count=lognum, interval=interval,
                               workspace=workspace)
-        fuzzer.fuzz()
+
+        callback = None
+        try:
+
+            # 如果 没有提供 callback_file 参数，尝试从 workspace/callback.py 提取 callback 函数
+            if callback_file == "" and os.path.exists(os.path.join(workspace, "callback.py")):
+                callback_file = os.path.join(workspace, "callback.py")
+
+            if callback_file != "" and os.path.exists(callback_file):
+                m = imp.load_source(str(uuid.uuid1()), callback_file)
+                # 根据模块的 CALLBACK_FUNCTION 来找到 callback 的函数名
+                func_name = getattr(m, "CALLBACK_FUNCTION")
+                # 取出函数对象
+                callback = getattr(m, func_name)
+        except Exception as e:
+            print "获取 callback 失败，异常为 {}".format(e)
+
+        fuzzer.fuzz(callback=callback)
     else:
         try:
             fuzzer = SerialFuzzer(device, baud,
@@ -176,7 +233,8 @@ def serialfuzzer(device, baud, conf, sample, lognum, interval, workspace, type, 
 @click.option('--type', default="fuzz", help='运行模式,fuzz 或者 replay')
 @click.option('--crash_path', default="fuzz", help='存放异常序列的文件路径')
 @click.option('--usb_fuzz_type', default="ctrl", help='存放异常序列的文件路径')
-def usbfuzzer(id, conf, sample, lognum, interval, workspace, type, crash_path, usb_fuzz_type):
+@click.option('--callback_file', default="", help='存放 callback 函数实现的 py 文件，用于对变异数据进行修正，比如计算校验和')
+def usbfuzzer(id, conf, sample, lognum, interval, workspace, type, crash_path, usb_fuzz_type, callback_file):
     """ fuzz usb设备 """
 
     vid = int(id.split(":")[0].strip(), 16)
@@ -191,7 +249,23 @@ def usbfuzzer(id, conf, sample, lognum, interval, workspace, type, crash_path, u
                                 interval=interval,
                                 workspace=workspace)
 
-            fuzzer.fuzz()
+            callback = None
+            try:
+
+                # 如果 没有提供 callback_file 参数，尝试从 workspace/callback.py 提取 callback 函数
+                if callback_file == "" and os.path.exists(os.path.join(workspace, "callback.py")):
+                    callback_file = os.path.join(workspace, "callback.py")
+
+                if callback_file != "" and os.path.exists(callback_file):
+                    m = imp.load_source(str(uuid.uuid1()), callback_file)
+                    # 根据模块的 CALLBACK_FUNCTION 来找到 callback 的函数名
+                    func_name = getattr(m, "CALLBACK_FUNCTION")
+                    # 取出函数对象
+                    callback = getattr(m, func_name)
+            except Exception as e:
+                print "获取 callback 失败，异常为 {}".format(e)
+
+            fuzzer.fuzz(callback=callback)
     else:
         try:
             if usb_fuzz_type == "ctrl":

@@ -8,6 +8,13 @@
 @desc:
 """
 
+CALLBACK_FUNCTION = "checksum"
+
+
+def checksum(data):
+    print "计算校验和"
+    return data
+
 
 def process():
     print("from p1")

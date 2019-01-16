@@ -4,9 +4,8 @@ from collections import deque
 import json
 import os
 import datetime
-from queue import Queue
+from multiprocessing import Queue
 from threading import Thread
-
 LOG_QUEUE = Queue()
 
 

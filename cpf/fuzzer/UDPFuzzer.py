@@ -268,8 +268,8 @@ class UDPFuzzer:
             if self.welcome_msg:
                 # 获取欢迎消息
                 data = p.recv(1024)
-                while self.welcome_msg not in data:
-                    data = p.recv(1024)
+                if self.welcome_msg not in data:
+                    raise Exception("欢迎消息接收失败")
             else:
                 sleep(0.2)
 
@@ -282,6 +282,9 @@ class UDPFuzzer:
                     print("与服务器前序交互异常，下面是日志")
                     print("应该接受的回应：{}\n实际接收的回应：{}".format(seq['recv'], data.encode("hex")))
                     print("*" * 20)
+
+                    raise Exception("正常交互失败")
+
             # 发送 fuzz 数据包， 即最后一个数据包
             p.send(test_seqs[-1]['send'].decode('hex'))
 

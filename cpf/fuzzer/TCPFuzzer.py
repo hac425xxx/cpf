@@ -320,14 +320,14 @@ class TCPFuzzer:
                         # 获取欢迎消息
                         data = p.recv(1024)
                         if self.welcome_msg not in data:
-                            print "welcome:{}".format(data)
+                            raise Exception("欢迎消息接收失败")
                     else:
                         tran = self.trans[0]['trans']
                         for s in tran:
                             p.send(s['send'].decode('hex'))
                             data = p.recv(1024)
                             if s['recv'] not in data.encode('hex'):
-                                print("except: {}, actal recv: {}".format(s['recv'], data.encode('hex')))
+                                raise Exception("except: {}, actal recv: {}".format(s['recv'], data.encode('hex')))
                     del p
                     return True
                 except Exception as e:

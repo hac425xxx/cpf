@@ -20,7 +20,7 @@ from time import sleep
 import json
 import datetime
 
-DATABASE = '/tmp/xxxxx.db'
+DATABASE = os.path.join(os.path.abspath(""), 'info.db')
 # task_id:thread obj, 用来表示任务对应的线程
 THREADS = {}
 app = Flask(__name__)
@@ -194,7 +194,8 @@ def create():
     workspace = request.json['workspace']
 
     task_id = str(uuid.uuid1())
-    workdir = os.path.dirname(__file__)
+    # workdir = os.path.dirname(__file__)
+    workdir = os.path.abspath("")
 
     # 是否提供 样本库
     has_sample = False
@@ -263,6 +264,8 @@ def create():
         else:
             cmdline += " --sample {}".format(sample_path)
 
+    print cmdline
+    print workdir
     cmd = Command(cmdline, workdir)
     THREADS[task_id] = cmd
     pid = cmd.run()
@@ -294,7 +297,9 @@ def replay():
     crash_seq = crash_log['crash_seq']
 
     task_id = str(uuid.uuid1())
-    workdir = os.path.dirname(__file__)
+    # workdir = os.path.dirname(__file__)
+    workdir = os.path.abspath("")
+
     workspace = os.path.join("/tmp/replay-{}".format(task_id))
     os.mkdir(workspace)
 

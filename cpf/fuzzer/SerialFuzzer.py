@@ -315,8 +315,8 @@ class SerialFuzzer:
                     # 获取欢迎消息
                     # data = p.recv(1024)
                     data = p.recv_until(self.welcome_msg)
-                    while self.welcome_msg not in data:
-                        data = p.recv(1024)
+                    if self.welcome_msg not in data:
+                        raise Exception("欢迎消息接收失败")
                 else:
                     tran = self.trans[0]['trans']
                     for s in tran:

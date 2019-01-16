@@ -55,7 +55,8 @@ class Serial(Base):
 if __name__ == '__main__':
     from cpf.misc.utils import hexdump
 
-    com = Serial("/dev/ttyS0", 115200)
+    # com = Serial("/dev/ttyS0", 115200)
+    com = Serial("/dev/ttyACM0", 115200)
 
     com.send("aabbccddeeffgg")
     hexdump(com.recv())

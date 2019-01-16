@@ -274,16 +274,18 @@ class TCPFuzzer:
             # 如果服务器有欢迎消息，即欢迎消息非空，就先接收欢迎消息
             if self.welcome_msg:
                 # 获取欢迎消息
-                data = p.recv(1024)
-                while self.welcome_msg not in data:
-                    data = p.recv(1024)
+                # data = p.recv(1024)
+                data = p.recv_until(self.welcome_msg)
+                if self.welcome_msg not in data:
+                    raise Exception("获取欢迎消息失败")
             else:
                 sleep(0.2)
 
             # 发送前序数据包序列
             for seq in test_seqs[:-1]:
                 p.send(seq['send'].decode('hex'))
-                data = p.recv(1024)
+                # data = p.recv(1024)
+                data = p.recv_until(seq['recv'].decode('hex'))
                 if seq['recv'].decode('hex') not in data:
                     print("*" * 20)
                     print("与服务器前序交互异常，下面是日志")
@@ -318,14 +320,16 @@ class TCPFuzzer:
                     # 如果服务器有欢迎消息，即欢迎消息非空，就先接收欢迎消息
                     if self.welcome_msg:
                         # 获取欢迎消息
-                        data = p.recv(1024)
+                        # data = p.recv(1024)
+                        data = p.recv_until(self.welcome_msg)
                         if self.welcome_msg not in data:
                             raise Exception("欢迎消息接收失败")
                     else:
                         tran = self.trans[0]['trans']
                         for s in tran:
                             p.send(s['send'].decode('hex'))
-                            data = p.recv(1024)
+                            # data = p.recv(1024)
+                            data = p.recv_until(s['recv'].decode("hex"))
                             if s['recv'] not in data.encode('hex'):
                                 raise Exception("except: {}, actal recv: {}".format(s['recv'], data.encode('hex')))
                     del p

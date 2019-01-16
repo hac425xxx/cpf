@@ -269,8 +269,8 @@ class SerialFuzzer:
                 # 获取欢迎消息
                 # data = p.recv(1024)
                 data = p.recv_until(self.welcome_msg)
-                while self.welcome_msg not in data:
-                    data = p.recv(1024)
+                if self.welcome_msg not in data:
+                    raise Exception("获取欢迎消息失败")
             else:
                 sleep(0.2)
 

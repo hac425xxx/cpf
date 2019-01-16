@@ -9,6 +9,7 @@
 """
 import socket
 from time import sleep
+import time
 from cpf.protocol.Base import Base
 
 
@@ -23,9 +24,29 @@ class UDPCommunicator(Base):
         self.interval = interval
 
     def recv(self, size):
-        self.s.settimeout(3)
-        data, _ = self.s.recvfrom(size)
-        self.s.settimeout(None)
+        data = ""
+        try:
+            self.s.settimeout(3)
+            data, _ = self.s.recvfrom(size)
+        except:
+            self.s.settimeout(None)
+        return data
+
+    def recv_until(self, need, timeout=2):
+        """
+        读取到 need 返回所有读取的内容， 否则返回超时前读取的所有内容
+        :param need: 需要的字符串
+        :param timeout: 超时时间
+        :return: 读取的内容
+        """
+        start = time.time()
+        data = ""
+        while need not in data:
+            sleep(0.01)
+            delta = time.time() - start
+            if delta > timeout:
+                return data
+            data += self.recv(1024)
         return data
 
     def send(self, data):
@@ -40,9 +61,5 @@ class UDPCommunicator(Base):
 
 if __name__ == '__main__':
     udp = UDPCommunicator("127.0.0.1", 9999)
-    while True:
-        udp.send("ssssssssssssssssss")
-        sleep(0.5)
-    # print(udp.recv(8))
-
-    # print(udp.is_dead())
+    udp.send("sssssssssssssssssssssssssss")
+    print udp.recv_until("end", timeout=10)

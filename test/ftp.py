@@ -3,21 +3,16 @@
 
 from pwn import *
 
-context.log_level = "debug"
-p = remote("192.168.245.135", 21)
+# context.log_level = "debug"
+p = remote("192.168.245.131", 21)
 
 p.send("USER free\r\n")
 
-p.recvuntil("331")
-p.send("PASS free\r\n")
+print p.recvuntil("331")
+p.send("PASS frx\r\n")
 
-p.recvuntil("230")
+print p.recvuntil("230")
 
-data = ""
+p.send("PWD\r\n")
 
-with open("sample/ftp/easyftp.poc", "rb") as fp:
-    data = fp.read()
-
-p.send(data)
-
-p.interactive()
+print p.recv(1024)

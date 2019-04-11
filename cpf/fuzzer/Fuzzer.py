@@ -5,79 +5,81 @@ from time import sleep
 from cpf.mutate.Mutater import Mutater
 from cpf.misc.utils import *
 from cpf.misc.SequenceLogger import SequenceLogger
-from cpf.protocol.network.UDPCommunicator import UDPCommunicator
-from Fuzzer import Fuzzer
 import random, os
 
 
-class UDPFuzzerNew(Fuzzer):
-    def __init__(self, p1, p2, nomal_trans_conf, sample_path="", logseq_count=3, interval=0.01, workspace=""):
-        Fuzzer.__init__(self, p1, p2, UDPCommunicator, nomal_trans_conf, sample_path, logseq_count, interval,
-                        workspace)
-
-
-class UDPFuzzer:
-
-    def __init__(self, p1, p2, nomal_trans_conf, sample_path="", logseq_count=3, interval=0.01, workspace=""):
+class Fuzzer:
+    def __init__(self, p1, p2, Communicator, nomal_trans_conf, sample_path="", logseq_count=3, interval=0.01,
+                 workspace=""):
         """
 
         :param p1: 目标的 ip
         :param p2: 目标的端口
-        :param nomal_trans_conf: 交互序列配置文件，可以是目录，或者文件全路径
-        :param sample_path: 历史漏洞样本目录
+        :param nomal_trans_conf: 交互序列配置文件，可以是目录，或者文件全路径， 如果是目录就加载目录下的所有交互
+        :param sample_path: 历史漏洞样本目录路径
         :param logseq_count: 记录最近多少次的样本
-        :param interval: 发包的间隔时间
+        :param interval: 发包间隔
         """
+
+        # 工作目录用于存放运行日志，crash, 后续可能用于记录 log....
+        # 目录不存在就创建一个
+        self.workspace = workspace
+        if self.workspace != "":
+            if not os.path.exists(self.workspace):
+                os.mkdir(self.workspace)
+
         # 从交互配置文件里面导入状态信息
 
         # state_data 是一个数组，每一项代码每个状态下可选数据集合
         self.state_data = []
         # 一个数组，每一项都是一个完整的交互序列
         self.trans = []
+
         #  如果是目录的话，就加载目录下的所有交互文件，然后合并每个状态下的交互过程， 用来后续 fuzz 时做种子
-        if os.path.isdir(nomal_trans_conf):
-            trans_contents = []
-            for fname in os.listdir(nomal_trans_conf):
-                with open(os.path.join(nomal_trans_conf, fname), "r") as fp:
+        if nomal_trans_conf != "":
+            if os.path.isdir(nomal_trans_conf):
+                trans_contents = []
+                for fname in os.listdir(nomal_trans_conf):
+                    with open(os.path.join(nomal_trans_conf, fname), "r") as fp:
+                        content = json.loads(fp.read())
+                        self.welcome_msg = content["welcome_msg"].decode("hex")
+                        tran = {
+                            "file": fname,
+                            "trans": content['trans']
+                        }
+                        # 保存每个完整的交互序列，用于后续 fuzz
+                        self.trans.append(tran)
+                        trans_contents.append(content)
+
+                # 下面是合并个状态的交互过程，用来给 fuzz 做种子
+                for t in trans_contents:
+                    for i, s in enumerate(t['trans']):
+                        if len(self.state_data) > i:
+                            if s not in self.state_data[i]:
+                                self.state_data[i].append(s)
+                        else:
+                            self.state_data.append([s])
+
+            else:
+
+                # 当提供的是一个文件的情况
+                with open(nomal_trans_conf, "r") as fp:
                     content = json.loads(fp.read())
                     self.welcome_msg = content["welcome_msg"].decode("hex")
                     tran = {
-                        "file": fname,
+                        "file": os.path.basename(nomal_trans_conf),
                         "trans": content['trans']
                     }
-                    # 保存每个完整的交互序列，用于后续 fuzz
+
                     self.trans.append(tran)
-                    trans_contents.append(content)
+                    self.state_data = []
 
-            # 下面是合并个状态的交互过程，用来给 fuzz 做种子
-            for t in trans_contents:
-                for i, s in enumerate(t['trans']):
-                    if len(self.state_data) > i:
-                        if s not in self.state_data[i]:
-                            self.state_data[i].append(s)
-                    else:
-                        self.state_data.append([s])
-
-        else:
-
-            # 当提供的是一个文件的情况
-            with open(nomal_trans_conf, "r") as fp:
-                content = json.loads(fp.read())
-                self.welcome_msg = content["welcome_msg"].decode("hex")
-                tran = {
-                    "file": os.path.basename(nomal_trans_conf),
-                    "trans": content['trans']
-                }
-
-                self.trans.append(tran)
-                self.state_data = []
-
-                for i, s in enumerate(content["trans"]):
-                    if len(self.state_data) > i:
-                        if s not in self.state_data[i]:
-                            self.state_data[i].append(s)
-                    else:
-                        self.state_data.append([s])
+                    for i, s in enumerate(content["trans"]):
+                        if len(self.state_data) > i:
+                            if s not in self.state_data[i]:
+                                self.state_data[i].append(s)
+                        else:
+                            self.state_data.append([s])
 
         # print json.dumps(self.state_data)
 
@@ -108,16 +110,12 @@ class UDPFuzzer:
                 # 把路径加到 samples 里面，供后续取用
                 self.samples.append(sample)
 
-        self.workspace = workspace
-        if self.workspace != "":
-            if not os.path.exists(self.workspace):
-                os.mkdir(self.workspace)
-
-        # 初始化测试序列日志队列，保存最近3次的测试序列
+        # 初始化测试序列日志队列，保存最近3次的测试序列, 设置log目录为 workspace/logs
         self.logger = SequenceLogger(maxlen=logseq_count, log_dir=os.path.join(self.workspace, "logs"))
 
-        self.host = p1
-        self.port = p2
+        self.p1 = p1
+        self.p2 = p2
+        self.Communicator = Communicator  # 通信类
 
         self.interval = interval
 
@@ -194,7 +192,7 @@ class UDPFuzzer:
                         sample['state'].append(i)
                     else:
                         # 否则直接变异
-                        fuzz_seq['send'] = self.mutater.mutate(raw, maxlen=4000).encode("hex")
+                        fuzz_seq['send'] = self.mutater.mutate(raw).encode("hex")
 
                     # 由于 python 指针传值的原因，需要重新生成对象，避免出现问题
                     # 生成完整的一个 测试序列
@@ -204,6 +202,9 @@ class UDPFuzzer:
 
                     # 发送测试序列
                     if not self.send_to_target(test_seqs):
+                        # 如果发送序列失败判断下 服务器是否存活
+                        # sleep(0.5)
+                        # 如果已经挂了，就重放最近的流量确认不是由于并发导致的原因
 
                         print("序列发送失败，下面 sleep 一下，让服务器休息会")
                         # 休息一段时间，然后重放测试用例
@@ -213,7 +214,6 @@ class UDPFuzzer:
                         if self.exception_count > 6:
                             print("*" * 20)
                             print("发送数据失败次数已达上限，服务貌似已经挂了， 退出")
-
                             print("*" * 20)
                             seqs = self.logger.dump_sequence()
                             print("测试: {} 次, 异常序列: {}".format(self.fuzz_count, json.dumps(seqs)))
@@ -269,7 +269,7 @@ class UDPFuzzer:
         #  发送数据包序列前，把当前要发送序列存入 最大长度为 3 的队列里面， 用于后续记录日志
 
         try:
-            p = UDPCommunicator(self.host, self.port, interval=self.interval)
+            p = self.Communicator(self.p1, self.p2, interval=self.interval)
 
             # 如果服务器有欢迎消息，即欢迎消息非空，就先接收欢迎消息
             if self.welcome_msg:
@@ -277,7 +277,7 @@ class UDPFuzzer:
                 # data = p.recv(1024)
                 data = p.recv_until(self.welcome_msg)
                 if self.welcome_msg not in data:
-                    raise Exception("欢迎消息接收失败")
+                    raise Exception("获取欢迎消息失败")
             else:
                 sleep(0.2)
 
@@ -291,7 +291,6 @@ class UDPFuzzer:
                     print("与服务器前序交互异常，下面是日志")
                     print("应该接受的回应：{}\n实际接收的回应：{}".format(seq['recv'], data.encode("hex")))
                     print("*" * 20)
-
             # 发送 fuzz 数据包， 即最后一个数据包
             p.send(test_seqs[-1]['send'].decode('hex'))
 
@@ -310,17 +309,15 @@ class UDPFuzzer:
         :return: 如果存活返回 True, 否则返回 False
         """
 
-        # 首先检查端口是否开放
         data = ""
         count = 0
 
         while count < 3:
             try:
-                p = UDPCommunicator(self.host, self.port)
+                p = self.Communicator(self.p1, self.p2)
                 # 如果服务器有欢迎消息，即欢迎消息非空，就先接收欢迎消息
                 if self.welcome_msg:
                     # 获取欢迎消息
-                    # data = p.recv(1024)
                     data = p.recv_until(self.welcome_msg)
                     if self.welcome_msg not in data:
                         raise Exception("欢迎消息接收失败")
@@ -331,8 +328,7 @@ class UDPFuzzer:
                         # data = p.recv(1024)
                         data = p.recv_until(s['recv'].decode("hex"))
                         if s['recv'] not in data.encode('hex'):
-                            print("except: {}, actal recv: {}".format(s['recv'], data.encode('hex')))
-                            raise Exception("序列数据发送异常")
+                            raise Exception("except: {}, actal recv: {}".format(s['recv'], data.encode('hex')))
                 del p
                 return True
             except Exception as e:
@@ -382,17 +378,3 @@ class UDPFuzzer:
                 return False
             print("噢， 服务挂了")
         return True
-
-
-if __name__ == '__main__':
-    """
-    执行命令
-    net-snmp-5.7.3/agent/snmpd -f -V -c ../../snmpd.conf -Ln  127.0.0.1:1111
-    """
-    #
-    # fuzzer = UDPFuzzer("127.0.0.1", 1111, sample_path="../../test/sample/snmp/",
-    #                    nomal_trans_conf="../../test/conf/snmp/snmpv3.json", interval=0.03)
-
-    fuzzer = UDPFuzzer("127.0.0.1", 1111,
-                       nomal_trans_conf="../../test/conf/snmp/snmpv3.json", interval=0.03)
-    fuzzer.fuzz()

@@ -96,7 +96,9 @@ class Fuzzer:
                         else:
                             self.state_data.append([s])
 
+        # 用于保存历史漏洞用例
         self.history_testcases = []
+        # 一些常量
         self.token = []
 
         # 加载以后漏洞库的样本路径， 用于 fuzz 时的种子
@@ -146,42 +148,47 @@ class Fuzzer:
         return population
 
     def fitness(self, raw, dirty):
+        """
+        计算得分
+        :param raw: 原始数据
+        :param dirty: 变异后的数据
+        :return: 相似度
+        """
         return difflib.SequenceMatcher(None, raw, dirty).quick_ratio()
 
-    def chose(self, q, count):
+    def roulette_choose(self, candidates, count):
         """
-
-        :param q:  [(data, weigh), ....] 数组， 每一项为数据和权重
+        :param candidates:  [(data, weigh), ....] 数组， 每一项为数据和权重
         :param count:  抽取的元素个数
         :return:  根据 weigh 采用轮盘赌的方式抽取出来的 count 个元素的值
         """
 
-        weight = []
-        id = []
-        for i in q:
-            id.append(i[0])
-            weight.append(i[1])
+        weight_list = []
+        value_list = []
+        for i in candidates:
+            value_list.append(i[0])
+            weight_list.append(i[1])
 
-        num = len(id)
+        num = len(value_list)
         l_weight = []
         for k in range(num):
             if k == 0:
-                l_weight.append(weight[k])
+                l_weight.append(weight_list[k])
             else:
-                l_weight.append(l_weight[k - 1] + weight[k])  ##计算累积权重
+                l_weight.append(l_weight[k - 1] + weight_list[k])  ##计算累积权重
 
         items = []
         for i in range(count):
             luck_num = random.uniform(0, l_weight[num - 1])  ##生成每次摇号的幸运值
             for m in range(num):
                 if luck_num <= l_weight[m]:
-                    items.append(id[m])
+                    items.append(value_list[m])
                     break
         return items
 
-    def cross(self, p1, p2):
+    def cross_mutate(self, p1, p2):
         """
-        样本交叉编译， p1 的前面部分 + p2 的后面部分
+        样本交叉变异， p1 的前面部分 + p2 的后面部分
         :param p1:
         :param p2:
         :return:
@@ -253,24 +260,26 @@ class Fuzzer:
                 # 取出正常用例， 用于计算后续样本的得分 ，即与正常用例的相似度
                 raw_data = normal_interaction[current_state]['send'].decode("hex")
 
-                for c in xrange(test_count):
-                    # 生成变异后的数据包
-                    ga_sample_list = normal_interaction_information['ga_sample_list'][current_state]
-
+                for i in xrange(test_count):
                     choice = random.random()
-
-                    # 根据随机选择是使用 GA 的变异方式， 还是使用原来的变异方式
+                    # 根据随机值，选择是使用 GA 的变异方式， 还是使用原来的变异方式
                     if choice < 0.8:
+                        ga_sample_list = normal_interaction_information['ga_sample_list'][current_state]
                         # 根据概率 杂交或者 从队列里面取一个
                         if choice < 0.4:
-                            p1, p2 = self.chose(ga_sample_list, 2)
-                            c = self.cross(p1, p2)  # 杂交
+                            p1, p2 = self.roulette_choose(ga_sample_list, 2)
+                            parent = self.cross_mutate(p1, p2)  # 杂交
                         else:
-                            c = ga_sample_list[0][0]
+                            # 直接取出得分最高的样本进行变异
+                            parent = ga_sample_list[0][0]
 
-                        testcase = self.mutater.mutate(c, fuzz_rate=0.3)
+                        # 变异样本
+                        testcase = self.mutater.mutate(parent, fuzz_rate=0.3)
                         score = self.fitness(raw_data, testcase)
+                        # 加入种群队列
                         ga_sample_list.append((testcase, score))
+
+                        # 保证种群大小在 100 以内， 同时按得分，由高到低排列
                         normal_interaction_information['ga_sample_list'][current_state] = sorted(ga_sample_list,
                                                                                                  key=lambda x: x[1],
                                                                                                  reverse=True)[:100]
@@ -278,7 +287,7 @@ class Fuzzer:
                         # 采用原来的变异方式， 即根据概率选择是否采用利用用例作为种子，还是使用原始样本
                         testcase = raw_data
                         history_testcase = {}
-                        # 根据随机， 看是否用漏洞库里的样本做种子
+                        # 根据随机值， 看是否用漏洞库里的样本做种子
                         if self.history_testcases and random.random() < 0.1:
                             history_testcase = random.choice(self.history_testcases)
                             path = history_testcase['path']
@@ -293,11 +302,11 @@ class Fuzzer:
                             # 否则直接变异
                             testcase = self.mutater.mutate(testcase)
 
+                    # 构建最后一个交互， 用变异数据填充
                     fuzz_seq['recv'] = normal_interaction[current_state]['recv']
                     fuzz_seq['send'] = testcase.encode("hex")
 
-                    # 由于 python 指针传值的原因，需要重新生成对象，避免出现问题
-                    # 生成完整的一个测试序列
+                    # 生成完整的一个测试序列， 由于 python 指针传值的原因，需要重新生成对象，避免出现问题
                     test_seqs = []
                     test_seqs += pre_seqs
                     test_seqs.append(fuzz_seq)
@@ -415,15 +424,15 @@ class Fuzzer:
                     # 获取欢迎消息
                     data = p.recv_until(self.welcome_msg)
                     if self.welcome_msg not in data:
-                        raise Exception("欢迎消息接收失败")
+                        raise Exception(u"欢迎消息接收失败")
                 else:
                     tran = self.trans[0]['trans']
-                    for s in tran:
+                    for s in tran:  # type: dict['send',str]
                         p.send(s['send'].decode('hex'))
                         # data = p.recv(1024)
                         data = p.recv_until(s['recv'].decode("hex"))
                         if s['recv'] not in data.encode('hex'):
-                            raise Exception("except: {}, actal recv: {}".format(s['recv'], data.encode('hex')))
+                            raise Exception(u"应该的响应: {}, 实际收到的响应: {}".format(s['recv'], data.encode('hex')))
                 del p
                 return True
             except Exception as e:
@@ -460,7 +469,7 @@ class Fuzzer:
 
         return False
 
-    def check_vuln(self, seqs, wait_time=1):
+    def check_vuln(self, seqs):
         """
         通过重放序列来重现漏洞
         :param seqs: 一个完成的交互数据包序列
@@ -468,7 +477,6 @@ class Fuzzer:
         """
         if self.send_to_target(seqs):
             print("发包成功，下面测试服务是否存活")
-            sleep(wait_time)
             if self.is_alive():
                 return False
             print("噢， 服务挂了")

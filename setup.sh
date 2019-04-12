@@ -1,0 +1,1 @@
+pip install -r requirements.txt && echo $(pwd) > /usr/local/lib/python2.7/dist-packages/cpf.pth && python -c "import cpf.mutate.Mutater; print 'ok!'"

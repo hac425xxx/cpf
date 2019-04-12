@@ -10,6 +10,7 @@ import random, os
 
 
 class Fuzzer:
+
     def __init__(self, p1, p2, Communicator, nomal_trans_conf, sample_path="", logseq_count=3, interval=0.01,
                  workspace=""):
         """
@@ -95,7 +96,7 @@ class Fuzzer:
                         else:
                             self.state_data.append([s])
 
-        self.samples = []
+        self.history_testcases = []
         self.token = []
 
         # 加载以后漏洞库的样本路径， 用于 fuzz 时的种子
@@ -120,7 +121,7 @@ class Fuzzer:
                 sample['hit'] = 0
 
                 # 把路径加到 samples 里面，供后续取用
-                self.samples.append(sample)
+                self.history_testcases.append(sample)
 
         # 初始化测试序列日志队列，保存最近3次的测试序列, 设置log目录为 workspace/logs
         self.logger = SequenceLogger(maxlen=logseq_count, log_dir=os.path.join(self.workspace, "logs"))
@@ -250,7 +251,7 @@ class Fuzzer:
                     test_count = int(self.perseq_testcount * (current_state + 1) * 0.8)
 
                 # 取出正常用例， 用于计算后续样本的得分 ，即与正常用例的相似度
-                raw = normal_interaction[current_state]['send'].decode("hex")
+                raw_data = normal_interaction[current_state]['send'].decode("hex")
 
                 for c in xrange(test_count):
                     # 生成变异后的数据包
@@ -258,58 +259,56 @@ class Fuzzer:
 
                     choice = random.random()
 
-                    # 根据概率 杂交或者 从队列里面取一个
-                    if choice < 0.4:
-                        p1, p2 = self.chose(ga_sample_list, 2)
-                        c = self.cross(p1, p2)  # 杂交
+                    # 根据随机选择是使用 GA 的变异方式， 还是使用原来的变异方式
+                    if choice < 0.8:
+                        # 根据概率 杂交或者 从队列里面取一个
+                        if choice < 0.4:
+                            p1, p2 = self.chose(ga_sample_list, 2)
+                            c = self.cross(p1, p2)  # 杂交
+                        else:
+                            c = ga_sample_list[0][0]
+
+                        testcase = self.mutater.mutate(c, fuzz_rate=0.3)
+                        score = self.fitness(raw_data, testcase)
+                        ga_sample_list.append((testcase, score))
+                        normal_interaction_information['ga_sample_list'][current_state] = sorted(ga_sample_list,
+                                                                                                 key=lambda x: x[1],
+                                                                                                 reverse=True)[:100]
                     else:
-                        c = ga_sample_list[0][0]
+                        # 采用原来的变异方式， 即根据概率选择是否采用利用用例作为种子，还是使用原始样本
+                        testcase = raw_data
+                        history_testcase = {}
+                        # 根据随机， 看是否用漏洞库里的样本做种子
+                        if self.history_testcases and random.random() < 0.1:
+                            history_testcase = random.choice(self.history_testcases)
+                            path = history_testcase['path']
+                            history_testcase['hit'] += 1
+                            with open(path, 'rb') as fp:
+                                testcase = fp.read()
 
-                    testcase = self.mutater.mutate(c, fuzz_rate=0.3)
-                    score = self.fitness(raw, testcase)
-                    ga_sample_list.append((testcase, score))
-                    normal_interaction_information['ga_sample_list'][current_state] = sorted(ga_sample_list,
-                                                                                             key=lambda x: x[1],
-                                                                                             reverse=True)[:100]
+                        if history_testcase and current_state not in history_testcase['state']:
+                            # 如果种子文件是样本，且是第一次使用，就直接重放
+                            history_testcase['state'].append(current_state)
+                        else:
+                            # 否则直接变异
+                            testcase = self.mutater.mutate(testcase)
 
-                    # raw = random.choice(self.state_data[current_state])['send'].decode("hex")
                     fuzz_seq['recv'] = normal_interaction[current_state]['recv']
                     fuzz_seq['send'] = testcase.encode("hex")
 
-                    # sample = {}
-                    # # 根据随机， 看是否用漏洞库里的样本做种子
-                    # if self.samples and random.randint(0, 20) < 3:
-                    #     sample = random.choice(self.samples)
-                    #     path = sample['path']
-                    #     sample['hit'] += 1
-                    #     with open(path, 'rb') as fp:
-                    #         raw = fp.read()
-                    #
-                    # #  如果种子文件是样本，且是第一次使用，就直接重放
-                    # if sample and current_state not in sample['state']:
-                    #     fuzz_seq['send'] = raw.encode('hex')
-                    #     sample['state'].append(current_state)
-                    # else:
-                    #     # 否则直接变异
-                    #     fuzz_seq['send'] = self.mutater.mutate(raw).encode("hex")
-
                     # 由于 python 指针传值的原因，需要重新生成对象，避免出现问题
-                    # 生成完整的一个 测试序列
+                    # 生成完整的一个测试序列
                     test_seqs = []
                     test_seqs += pre_seqs
                     test_seqs.append(fuzz_seq)
 
                     # 发送测试序列
                     if not self.send_to_target(test_seqs):
-                        # 如果发送序列失败判断下 服务器是否存活
-                        # sleep(0.5)
-                        # 如果已经挂了，就重放最近的流量确认不是由于并发导致的原因
-
+                        # 如果发送序列失败判断下服务器是否存活, 如果已经挂了，就重放最近的流量确认不是由于并发导致的原因
                         print("序列发送失败，下面 sleep 一下，让服务器休息会")
                         # 休息一段时间，然后重放测试用例
                         sleep(1.0 * self.exception_count)
                         self.exception_count += 1
-
                         if self.exception_count > 6:
                             print("*" * 20)
                             print("发送数据失败次数已达上限，服务貌似已经挂了， 退出")
@@ -322,10 +321,6 @@ class Fuzzer:
                             self.logger.exit_thread()
                             raise Exception("服务貌似已经挂了， 退出")
 
-                            # if self.check_again(seqs):
-                            #     print("测试: {} 次, 异常序列: {}".format(self.fuzz_count, json.dumps(seqs)))
-                            #     raise Exception("服务貌似已经挂了， 退出")
-
                     else:
                         self.logger.add_to_queue(test_seqs)
                         if not self.is_alive():
@@ -335,9 +330,7 @@ class Fuzzer:
                             sleep(1.0 * self.exception_count)
                             if self.check_again(seqs):
                                 print("测试: {} 次, 异常序列: {}".format(self.fuzz_count, json.dumps(seqs)))
-
                                 self.save_crash(seqs, "crash")
-
                                 self.logger.exit_thread()
                                 raise Exception("服务貌似已经挂了， 退出")
                         if self.exception_count > 2:

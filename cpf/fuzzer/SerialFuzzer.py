@@ -1,13 +1,8 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
 import json
-from time import sleep
-from cpf.mutate.Mutater import Mutater
-from cpf.misc.utils import *
-from cpf.misc.SequenceLogger import SequenceLogger
 from cpf.protocol.serial.Serial import Serial
 from Fuzzer import Fuzzer
-import random, os
 
 
 class SerialFuzzer(Fuzzer):

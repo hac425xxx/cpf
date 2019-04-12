@@ -2,6 +2,7 @@
 # -*- coding: UTF-8 -*-
 import json
 from time import sleep
+import difflib
 from cpf.mutate.Mutater import Mutater
 from cpf.misc.utils import *
 from cpf.misc.SequenceLogger import SequenceLogger
@@ -15,7 +16,7 @@ class Fuzzer:
 
         :param p1: 目标的 ip
         :param p2: 目标的端口
-        :param nomal_trans_conf: 交互序列配置文件，可以是目录，或者文件全路径， 如果是目录就加载目录下的所有交互
+        :param nomal_trans_conf: 正常交互序列配置文件存放路径，可以是目录，或者文件全路径， 如果是目录就加载目录下的所有交互
         :param sample_path: 历史漏洞样本目录路径
         :param logseq_count: 记录最近多少次的样本
         :param interval: 发包间隔
@@ -32,23 +33,32 @@ class Fuzzer:
 
         # state_data 是一个数组，每一项代码每个状态下可选数据集合
         self.state_data = []
+
         # 一个数组，每一项都是一个完整的交互序列
         self.trans = []
+
+        self.mutater = Mutater()
 
         #  如果是目录的话，就加载目录下的所有交互文件，然后合并每个状态下的交互过程， 用来后续 fuzz 时做种子
         if nomal_trans_conf != "":
             if os.path.isdir(nomal_trans_conf):
                 trans_contents = []
                 for fname in os.listdir(nomal_trans_conf):
-                    with open(os.path.join(nomal_trans_conf, fname), "r") as fp:
+                    full_path = os.path.join(nomal_trans_conf, fname)
+                    with open(full_path, "r") as fp:
                         content = json.loads(fp.read())
                         self.welcome_msg = content["welcome_msg"].decode("hex")
-                        tran = {
-                            "file": fname,
+                        normal_interaction = {
+                            "ga_sample_list": [],
+                            "file": full_path,
                             "trans": content['trans']
                         }
-                        # 保存每个完整的交互序列，用于后续 fuzz
-                        self.trans.append(tran)
+
+                        for state in range(len(content['trans'])):
+                            send_data = content['trans'][state]['send'].decode("hex")
+                            normal_interaction['ga_sample_list'].append(self.init_population(send_data))
+
+                        self.trans.append(normal_interaction)
                         trans_contents.append(content)
 
                 # 下面是合并个状态的交互过程，用来给 fuzz 做种子
@@ -60,18 +70,22 @@ class Fuzzer:
                         else:
                             self.state_data.append([s])
 
-            else:
-
-                # 当提供的是一个文件的情况
+            else:  # 当提供的是一个文件的情况
                 with open(nomal_trans_conf, "r") as fp:
                     content = json.loads(fp.read())
                     self.welcome_msg = content["welcome_msg"].decode("hex")
-                    tran = {
-                        "file": os.path.basename(nomal_trans_conf),
+                    normal_interaction = {
+                        "ga_sample_list": [],
+                        "file": nomal_trans_conf,
                         "trans": content['trans']
                     }
 
-                    self.trans.append(tran)
+                    # 为每个状态的数据生成初始种群
+                    for state in range(len(content['trans'])):
+                        send_data = content['trans'][state]['send'].decode("hex")
+                        normal_interaction['ga_sample_list'].append(self.init_population(send_data))
+
+                    self.trans.append(normal_interaction)
                     self.state_data = []
 
                     for i, s in enumerate(content["trans"]):
@@ -81,12 +95,10 @@ class Fuzzer:
                         else:
                             self.state_data.append([s])
 
-        # print json.dumps(self.state_data)
-
         self.samples = []
         self.token = []
 
-        # 加载以后漏洞库的样本路径， 用于 fuzz 时的 种子
+        # 加载以后漏洞库的样本路径， 用于 fuzz 时的种子
         if sample_path:
 
             if os.path.exists(os.path.join(sample_path, "token.json")):
@@ -123,6 +135,71 @@ class Fuzzer:
         self.fuzz_count = 0
         self.exception_count = 1
 
+    def init_population(self, raw, size=4):
+        population = []
+        for i in range(size):
+            dirty = self.mutater.mutate(raw, fuzz_rate=0.2)
+            score = self.fitness(raw, dirty)
+            population.append((dirty, score))
+        population = sorted(population, key=lambda x: x[1], reverse=True)
+        return population
+
+    def fitness(self, raw, dirty):
+        return difflib.SequenceMatcher(None, raw, dirty).quick_ratio()
+
+    def chose(self, q, count):
+        """
+
+        :param q:  [(data, weigh), ....] 数组， 每一项为数据和权重
+        :param count:  抽取的元素个数
+        :return:  根据 weigh 采用轮盘赌的方式抽取出来的 count 个元素的值
+        """
+
+        weight = []
+        id = []
+        for i in q:
+            id.append(i[0])
+            weight.append(i[1])
+
+        num = len(id)
+        l_weight = []
+        for k in range(num):
+            if k == 0:
+                l_weight.append(weight[k])
+            else:
+                l_weight.append(l_weight[k - 1] + weight[k])  ##计算累积权重
+
+        items = []
+        for i in range(count):
+            luck_num = random.uniform(0, l_weight[num - 1])  ##生成每次摇号的幸运值
+            for m in range(num):
+                if luck_num <= l_weight[m]:
+                    items.append(id[m])
+                    break
+        return items
+
+    def cross(self, p1, p2):
+        """
+        样本交叉编译， p1 的前面部分 + p2 的后面部分
+        :param p1:
+        :param p2:
+        :return:
+        """
+        ret = ""
+        if len(p1) == 1:
+            ret += p1
+        else:
+            idx1 = random.randint(1, len(p1) - 1)
+            ret += p1[:idx1]
+
+        if len(p2) == 1:
+            ret += p2
+        else:
+            idx2 = random.randint(1, len(p2) - 1)
+            ret += p2[:idx2]
+
+        return ret
+
     def fuzz(self, start_state=0, callback=None, mutate_max_count=25, perseq_testcount=200,
              max_fuzz_count=None):
         """
@@ -144,16 +221,17 @@ class Fuzzer:
                 return True
 
             # 首先随机取一个完整的交互序列
-            tran = random.choice(self.trans)['trans']
+            normal_interaction_information = random.choice(self.trans)
+            normal_interaction = normal_interaction_information['trans']
 
             # 对这个交互序列下的所有状态进行遍历 fuzz
-            for i in xrange(start_state, len(tran)):
+            for current_state in xrange(start_state, len(normal_interaction)):
 
                 if self.fuzz_count % 10000:
                     self.mutater.mutate_max_count += 1
 
-                print("当前fuzz状态: {}, 此时已经fuzz {} 次".format(i + 1, self.fuzz_count))
-
+                # 保存 fuzz 运行状态数据
+                print("当前fuzz状态: {}, 此时已经fuzz {} 次".format(current_state + 1, self.fuzz_count))
                 data = {
                     "fuzz_count": self.fuzz_count,
                     "is_run": True,
@@ -161,38 +239,59 @@ class Fuzzer:
                 with open(os.path.join(self.workspace, "runtime.json"), "w") as fp:
                     fp.write(json.dumps(data))
 
-                # 到达生成当前状态 i 的前序数据包
-                pre_seqs = generate_preseqs(tran, i)
+                # 到达生成当前状态 current_state 的前序数据包， 随后对 current_state 下的 send 进行变异
+                pre_seqs = generate_preseqs(normal_interaction, current_state)
                 fuzz_seq = {}
 
                 # 计算每个状态 fuzz 的次数
                 if max_fuzz_count:
-                    test_count = max_fuzz_count / len(tran)
+                    test_count = max_fuzz_count / len(normal_interaction)
                 else:
-                    test_count = int(self.perseq_testcount * (i + 1) * 0.8)
+                    test_count = int(self.perseq_testcount * (current_state + 1) * 0.8)
+
+                # 取出正常用例， 用于计算后续样本的得分 ，即与正常用例的相似度
+                raw = normal_interaction[current_state]['send'].decode("hex")
 
                 for c in xrange(test_count):
                     # 生成变异后的数据包
+                    ga_sample_list = normal_interaction_information['ga_sample_list'][current_state]
 
-                    raw = random.choice(self.state_data[i])['send'].decode("hex")
-                    fuzz_seq['recv'] = tran[i]['recv']
+                    choice = random.random()
 
-                    sample = {}
-                    # 根据随机， 看是否用漏洞库里的样本做种子
-                    if self.samples and random.randint(0, 20) < 3:
-                        sample = random.choice(self.samples)
-                        path = sample['path']
-                        sample['hit'] += 1
-                        with open(path, 'rb') as fp:
-                            raw = fp.read()
-
-                    #  如果种子文件是样本，且是第一次使用，就直接重放
-                    if sample and i not in sample['state']:
-                        fuzz_seq['send'] = raw.encode('hex')
-                        sample['state'].append(i)
+                    # 根据概率 杂交或者 从队列里面取一个
+                    if choice < 0.4:
+                        p1, p2 = self.chose(ga_sample_list, 2)
+                        c = self.cross(p1, p2)  # 杂交
                     else:
-                        # 否则直接变异
-                        fuzz_seq['send'] = self.mutater.mutate(raw).encode("hex")
+                        c = ga_sample_list[0][0]
+
+                    testcase = self.mutater.mutate(c, fuzz_rate=0.3)
+                    score = self.fitness(raw, testcase)
+                    ga_sample_list.append((testcase, score))
+                    normal_interaction_information['ga_sample_list'][current_state] = sorted(ga_sample_list,
+                                                                                             key=lambda x: x[1],
+                                                                                             reverse=True)[:100]
+
+                    # raw = random.choice(self.state_data[current_state])['send'].decode("hex")
+                    fuzz_seq['recv'] = normal_interaction[current_state]['recv']
+                    fuzz_seq['send'] = testcase.encode("hex")
+
+                    # sample = {}
+                    # # 根据随机， 看是否用漏洞库里的样本做种子
+                    # if self.samples and random.randint(0, 20) < 3:
+                    #     sample = random.choice(self.samples)
+                    #     path = sample['path']
+                    #     sample['hit'] += 1
+                    #     with open(path, 'rb') as fp:
+                    #         raw = fp.read()
+                    #
+                    # #  如果种子文件是样本，且是第一次使用，就直接重放
+                    # if sample and current_state not in sample['state']:
+                    #     fuzz_seq['send'] = raw.encode('hex')
+                    #     sample['state'].append(current_state)
+                    # else:
+                    #     # 否则直接变异
+                    #     fuzz_seq['send'] = self.mutater.mutate(raw).encode("hex")
 
                     # 由于 python 指针传值的原因，需要重新生成对象，避免出现问题
                     # 生成完整的一个 测试序列
@@ -259,6 +358,9 @@ class Fuzzer:
         with open(os.path.join(self.workspace, "runtime.json"), "w") as fp:
             fp.write(json.dumps(data))
 
+    def get_communicator(self):
+        return self.Communicator(self.p1, self.p2, interval=self.interval)
+
     def send_to_target(self, test_seqs):
         """
         发送数据包序列
@@ -269,7 +371,7 @@ class Fuzzer:
         #  发送数据包序列前，把当前要发送序列存入 最大长度为 3 的队列里面， 用于后续记录日志
 
         try:
-            p = self.Communicator(self.p1, self.p2, interval=self.interval)
+            p = self.get_communicator()
 
             # 如果服务器有欢迎消息，即欢迎消息非空，就先接收欢迎消息
             if self.welcome_msg:
@@ -305,7 +407,7 @@ class Fuzzer:
 
     def is_alive(self):
         """
-        判断目标是否存活
+        判断目标是否能够正常提供服务
         :return: 如果存活返回 True, 否则返回 False
         """
 
@@ -314,7 +416,7 @@ class Fuzzer:
 
         while count < 3:
             try:
-                p = self.Communicator(self.p1, self.p2)
+                p = self.get_communicator()
                 # 如果服务器有欢迎消息，即欢迎消息非空，就先接收欢迎消息
                 if self.welcome_msg:
                     # 获取欢迎消息

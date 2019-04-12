@@ -14,6 +14,7 @@ from cpf.protocol.usb.QCDM import *
 from cpf.protocol.usb.MTP import *
 from cpf.protocol.usb.MSC import *
 from cpf.misc.utils import *
+from Fuzzer import Fuzzer
 from time import sleep
 
 
@@ -357,6 +358,13 @@ class MSCFuzzer:
         if not self.dev.is_alive():
             print "设备未存活，下面打印最近的发包序列"
             print data
+
+
+class BulkFuzzerNew(Fuzzer):
+    def __init__(self, p1, p2, nomal_trans_conf, sample_path="", logseq_count=3, interval=0.01,
+                 workspace=""):
+        Fuzzer.__init__(self, p1, p2, BulkPipe, nomal_trans_conf, sample_path, logseq_count, interval,
+                        workspace)
 
 
 class BulkFuzzer:

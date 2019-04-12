@@ -36,7 +36,7 @@ class Mutater:
         :return:
         """
 
-        if fuzz_rate == 1:
+        if fuzz_rate == 1 or len(data) < 20:
             # 选择变异次数
             count = random.randint(1, self.mutate_max_count)
             for i in xrange(count):
@@ -46,7 +46,6 @@ class Mutater:
                 if len(data) >= maxlen:
                     data = data[:maxlen - 1]
         else:
-
             length = len(data)
             fuzz_len = int(length * fuzz_rate)
             # 获取要填充的数据的长度

@@ -17,5 +17,12 @@ class Base:
     def send(self, data):
         raise NotImplementedError("请实现该函数，函数作用为：发送数据到目标， conf 为数据")
 
-    def is_dead(self):
-        raise NotImplementedError("请实现该函数，函数作用为：检测目标是否存活")
+
+
+    def recv_until(self, data):
+        """
+        返回到接收到 data 前所有接收的数据，一直到读完数据
+        :param data:
+        :return:
+        """
+        raise NotImplementedError("请实现该函数，函数作用为：返回到接收到 data 前所有接收的数据，一直到读完数据")

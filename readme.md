@@ -5,7 +5,7 @@
 毕设答辩胶片&演示视频
 
 ```
-https://github.com/hac425xxx/cpf/docs/
+https://github.com/hac425xxx/cpf/tree/main/docs
 ```
 
 
